@@ -125,7 +125,7 @@ svg.chart .grid{stroke:var(--line)}
 <script>
 "use strict";
 const SEED = null;
-const APP_VERSION = "1.2.1";
+const APP_VERSION = "1.2.2";
 const DB_KEY="crm.db.v1", AUTH_KEY="crm.auth.v1", COLS=["customers","products","orders","activities"];
 const DBX_FILE="/crm-data.json";
 
@@ -656,7 +656,7 @@ function vMore(app){
   else $("#s_conn").onclick=()=>{const k=$("#s_key").value.trim();if(!k){toast("Enter the App key first");return}dbxConnect(k);};
   $("#s_exp").onclick=()=>download("crm-backup-"+todayStr()+".json",JSON.stringify(exportData(),null,1),"application/json");
   $("#s_csv").onclick=exportCsv;
-  $("#s_imp").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const data=JSON.parse(r.result);const n=mergeInto(data,true);saveDb();toast(n&&n.patched?n.patched+" records updated":"Backup merged");render();}catch(err){alert("That file could not be read: "+err.message)}};r.readAsText(f);};
+  $("#s_imp").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const data=JSON.parse(r.result);const n=mergeInto(data,true);saveDb();applyProductInfo();toast(n&&n.patched?n.patched+" records updated":"Backup merged");render();}catch(err){alert("That file could not be read: "+err.message)}};r.readAsText(f);};
   $("#theme").querySelectorAll("button").forEach(b=>b.onclick=()=>{lsSet("crm.theme",b.dataset.v);applyTheme();render();});
 }
 function applyTheme(){const v=lsGet("crm.theme")||"auto";if(v==="auto")document.documentElement.removeAttribute("data-theme");else document.documentElement.setAttribute("data-theme",v);}
@@ -756,7 +756,7 @@ async function sync(manual){
     const day=todayStr();
     if(db.meta.lastBackupDay!==day){await dbxUpload("/backups/crm-"+day+".json",exportData());db.meta.lastBackupDay=day;}
     db.meta.dirty=false; db.meta.lastSync=nowIso(); syncErr=null; saveDb(false);
-    if(changed) render();
+    if(changed){applyProductInfo(); render();}
     if(manual) toast("Synced with Dropbox");
   }catch(e){syncErr=e.message; if(manual)toast("Sync failed: "+e.message);}
   syncing=false; updateSyncUi();
@@ -778,8 +778,21 @@ window.addEventListener("offline",updateSyncUi);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){sync(false);updateBadge();}});
 setInterval(()=>sync(false),5*60*1000);
 
+const PRODUCT_INFO_ID="2026-11-12";
+const PRODUCT_INFO=[{"id": "p_B117", "description": "W: 265", "category": "Integrale", "manufacturer": "MOLINI INDUSTRIALI SpA", "pack": "25 kg"}, {"id": "p_B136", "description": "W: 265", "category": "Tipo 2", "manufacturer": "MOLINI INDUSTRIALI SpA", "pack": "25 kg"}, {"id": "p_B202", "description": "W: 210", "category": "00/S", "manufacturer": "MOLINI INDUSTRIALI SpA", "pack": "25 kg"}, {"id": "p_B211", "description": "W: 210", "category": "00/S", "manufacturer": "MOLINI INDUSTRIALI SpA", "pack": "25 kg"}, {"id": "p_B322", "description": "W: 230", "category": "00", "manufacturer": "MOLINI INDUSTRIALI SpA", "pack": "25 kg"}, {"id": "p_B422", "description": "W: 265", "category": "00", "manufacturer": "MOLINI INDUSTRIALI SpA", "pack": "25 kg"}, {"id": "p_B623", "description": "W: 350", "category": "00", "manufacturer": "MOLINI INDUSTRIALI SpA", "pack": "25 kg"}, {"id": "p_B722", "description": "W: 340", "category": "00", "manufacturer": "MOLINI INDUSTRIALI SpA", "pack": "25 kg"}, {"id": "p_B122", "description": "W: 210", "category": "0/S", "manufacturer": "MOLINI INDUSTRIALI SpA", "pack": "25 kg"}, {"id": "p_B1022", "description": "W: 390", "category": "00", "manufacturer": "MOLINI INDUSTRIALI SpA", "pack": "25 kg"}, {"id": "p_B5009", "description": "W: 185", "category": "Semola", "manufacturer": "MOLINI INDUSTRIALI SpA", "pack": "25 kg"}, {"id": "p_B522", "category": "00", "manufacturer": "MOLINI INDUSTRIALI SpA", "pack": "25 kg"}, {"id": "p_L1235", "description": "W 330-360\nP/L 0.60-0.80", "category": "00", "manufacturer": "MOLINI INDUSTRIALI SpA", "pack": "25 kg"}, {"id": "p_L1275", "description": "W 290-320\nP/L 0.60-0.80", "category": "00", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L1035", "description": "W: 220-240\nP/L: 0.60-0.80", "category": "00", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L1075", "description": "W: 190-210\nP/L: 0.60-0.80", "category": "00", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L5005", "category": "R", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L1335", "description": "W: 530-580\nP/L: 0.80-1.10", "category": "00", "manufacturer": "MOLINI LARIO SpA"}, {"id": "p_L1515", "description": "W: 230-250\nP/L: 0.50-0.70", "category": "00", "manufacturer": "MOLINI LARIO SpA"}, {"id": "p_L1985", "description": "W: 460-500\nP/L: 0.60-0.85", "category": "00", "manufacturer": "MOLINI LARIO SpA"}, {"id": "p_L1265", "description": "W: 420-450\nP/L: 0.60-0.85", "category": "00", "manufacturer": "MOLINI LARIO SpA"}, {"id": "p_L1BQ5", "description": "W: 380-420\nP/L: 0.60-0.80", "category": "00", "manufacturer": "MOLINI LARIO SpA"}, {"id": "p_L1135", "description": "W: 350-380\nP/L: 0.60-0.80", "category": "00", "manufacturer": "MOLINI LARIO SpA"}, {"id": "p_L1945", "description": "W: 270-300\nP/L: 0.55-0.70", "category": "00", "manufacturer": "MOLINI LARIO SpA"}, {"id": "p_L1025", "description": "W: 250-270\nP/L: 0.60-0.80", "category": "00", "manufacturer": "MOLINI LARIO SpA"}, {"id": "p_L1085", "description": "W: 120-140\nP/L: 0.60-0.90", "category": "00", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L3085", "description": "W: 300-330\nP/L: 0.70-0.90", "category": "Tipo 1", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L3075", "description": "W: 220-240\nP/L: 0.70-0.90", "category": "Tipo 1", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L4055", "description": "W: 300-330\nP/L: 0.70-0.90", "category": "Tipo 2", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L4045", "description": "W: 220-240\nP/L: 0.70-0.90", "category": "Tipo 2", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L2095", "description": "W: 380-420\nP/L: 0.60-0.80", "category": "0", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L2435", "description": "W: 290-320\nP/L: 0.60-0.805", "category": "0", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L2175", "description": "W: 250-270\nP/L: 0.60-0.80", "category": "0", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L2235", "description": "W: 220-240\nP/L: 0.60-0.80", "category": "0", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L2015", "description": "W: 210-220\nP/L: 0.60-0.80", "category": "0", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L2045", "description": "W: 190-210\nP/L: 0.60-0.80", "category": "0", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L2145", "description": "W: 160-180\nP/L: 0.60-0.90", "category": "0", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L1CU5", "description": "W: 270-320\nP/L: 0.80-1.20", "category": "00", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L2D55", "description": "W: 210-250\nP/L: 0.50-0.80", "category": "0", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L1DH5", "description": "W: 380-420", "category": "00", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L1DI5", "description": "W: 350-380", "category": "00", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L1BM5", "description": "W: 170-190", "category": "00", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L1BN5", "description": "W: 300-330", "category": "00", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L1A25", "description": "W: 360-380", "category": "00", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L1BP5", "description": "W: 420-450", "category": "00", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}, {"id": "p_L5035", "category": "Tipo 1", "manufacturer": "MOLINI LARIO SpA", "pack": "25 kg"}];
+function applyProductInfo(){
+  if(db.meta.productInfo===PRODUCT_INFO_ID) return;
+  let n=0;
+  for(const inf of PRODUCT_INFO){
+    const p=db.products.find(x=>x.id===inf.id); if(!p) continue;
+    let ch=false; for(const [k,v] of Object.entries(inf)){ if(k!=="id"&&v&&!p[k]){p[k]=v;ch=true;} }
+    if(ch){p.updatedAt=nowIso();n++;}
+  }
+  db.meta.productInfo=PRODUCT_INFO_ID;
+  saveDb(n>0);
+}
 /* ---------- start ---------- */
-applyTheme(); loadDb(); updateSyncUi(); render(); handleRedirect(); sync(false);
+applyTheme(); loadDb(); if(live("products").length) applyProductInfo(); updateSyncUi(); render(); handleRedirect(); sync(false);
 if("serviceWorker" in navigator && (location.protocol==="https:"||location.hostname==="localhost")){try{navigator.serviceWorker.register("sw.js").catch(()=>{})}catch(e){}}
 </script>
 </body>
