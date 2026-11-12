@@ -115,17 +115,17 @@ svg.chart .grid{stroke:var(--line)}
   <button class="sync" id="syncBtn" title="Sync"><span class="dot" id="syncDot"></span><span id="syncTxt">Local</span></button>
 </header>
 <nav class="tabs" id="tabs">
-  <a href="#home" data-t="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>Alerts<span class="badge hide" id="badge"></span></a>
   <a href="#orders" data-t="orders"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5h11M9 12h11M9 19h11M4 5h.01M4 12h.01M4 19h.01"/></svg>Orders</a>
   <a href="#customers" data-t="customers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6M17 11a3 3 0 1 0 0-6M22 20c0-3-2-5-4-5.5"/></svg>Customers</a>
-  <a href="#stats" data-t="stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Stats</a>
+  <a href="#products" data-t="products"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>Products</a>
+  <a href="#home" data-t="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>Alerts<span class="badge hide" id="badge"></span></a>
   <a href="#more" data-t="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>More</a>
 </nav>
 <main id="app"></main>
 <script>
 "use strict";
 const SEED = null;
-const APP_VERSION = "1.1";
+const APP_VERSION = "1.2";
 const DB_KEY="crm.db.v1", AUTH_KEY="crm.auth.v1", COLS=["customers","products","orders","activities"];
 const DBX_FILE="/crm-data.json";
 
@@ -134,13 +134,14 @@ function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v);return true}catch(e){return false}}
 function lsDel(k){try{localStorage.removeItem(k)}catch(e){}}
 let db=null;
-function emptyDb(){return {customers:[],products:[],orders:[],activities:[],settings:{alertDays:7,updatedAt:"1970-01-01T00:00:00.000Z"},meta:{dirty:false,lastSync:null,lastBackupDay:null}}}
+function emptyDb(){return {customers:[],products:[],orders:[],activities:[],settings:{alertDays:7,cutoff:"2026-09-01",prevSalesman:"Michelangelo Delogu",updatedAt:"1970-01-01T00:00:00.000Z"},meta:{dirty:false,lastSync:null,lastBackupDay:null}}}
 function loadDb(){
   const raw=lsGet(DB_KEY);
   if(raw){try{db=JSON.parse(raw)}catch(e){db=null}}
   if(!db){db=emptyDb(); if(SEED){for(const c of COLS) db[c]=JSON.parse(JSON.stringify(SEED[c]||[]));} saveDb(false);}
   for(const c of COLS) db[c]=db[c]||[];
-  db.settings=Object.assign({alertDays:7,updatedAt:"1970-01-01T00:00:00.000Z"},db.settings||{});
+  db.settings=Object.assign({alertDays:7,cutoff:"2026-09-01",prevSalesman:"Michelangelo Delogu",updatedAt:"1970-01-01T00:00:00.000Z"},db.settings||{});
+  normalizeDb();
   db.meta=Object.assign({dirty:false,lastSync:null,lastBackupDay:null},db.meta||{});
 }
 function saveDb(markDirty=true){
@@ -149,6 +150,17 @@ function saveDb(markDirty=true){
   updateSyncUi(); if(markDirty) scheduleSync();
 }
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+
+function migrateCustomer(c){
+  if(!Array.isArray(c.contacts)){
+    c.contacts=[];
+    if(c.contact||c.phone||c.phone2||c.email) c.contacts.push({id:c.id+"_k1",name:c.contact||"",role:"",phone:c.phone||"",phone2:c.phone2||"",email:c.email||""});
+    c.mainContact=c.contacts.length?c.contacts[0].id:"";
+  }
+  if(c.contacts.length&&!c.contacts.some(k=>k.id===c.mainContact)) c.mainContact=c.contacts[0].id;
+}
+function normalizeDb(){ for(const c of db.customers) migrateCustomer(c); }
+function mainContact(c){return (c.contacts||[]).find(k=>k.id===c.mainContact)||(c.contacts||[])[0]||null}
 
 /* ---------- helpers ---------- */
 const $=s=>document.querySelector(s);
@@ -179,7 +191,9 @@ function lineNet(l){return (+l.listPrice||0)*(1-(+l.disc||0))}
 function orderQty(o){return o.lines.reduce((s,l)=>s+(+l.qty||0),0)}
 function orderNet(o){return o.lines.reduce((s,l)=>s+(+l.qty||0)*lineNet(l),0)}
 function orderTotal(o){return orderNet(o)*(1+(+o.vat||0)/100)}
-function tracked(o){return o.status!=="cancelled" && (o.status==="invoiced"||o.trackPayment)}
+function cutoff(){return db.settings.cutoff||"2026-09-01"}
+function isMine(o){return (o.date||"")>=cutoff()}
+function tracked(o){return o.status!=="cancelled" && !o.noTrack && isMine(o)}
 function dueDate(o){
   const base=o.invoiceDate||o.date; if(!base) return null;
   const days=+o.termsDays||0;
@@ -198,9 +212,12 @@ function payState(o){
   return {k:"open",days:d,due};
 }
 function statusChip(o){
-  const m={order:["Order","blue"],invoiced:["Invoiced","green"],cancelled:["Cancelled",""]}[o.status]||["?",""];
-  return `<span class="chip ${m[1]}">${m[0]}</span>`;
+  if(o.status==="cancelled") return `<span class="chip">Cancelled</span>`;
+  if(!isMine(o)) return `<span class="chip" title="${esc(db.settings.prevSalesman)}">${esc(initials(db.settings.prevSalesman))}</span>`;
+  return "";
 }
+function initials(n){return String(n||"").split(/\s+/).filter(Boolean).map(w=>w[0].toUpperCase()+".").join("")}
+function prodName(sku){return (prodBySku(sku)||{}).name||sku}
 function payChip(o){
   const p=payState(o); if(!p) return "";
   if(p.k==="paid") return `<span class="chip green">Paid</span>`;
@@ -269,11 +286,11 @@ function go(h){location.hash=h}
 window.addEventListener("hashchange",render);
 function setTab(t){document.querySelectorAll("#tabs a").forEach(a=>a.classList.toggle("on",a.dataset.t===t))}
 function render(){
-  route=location.hash.slice(1)||"home";
+  route=location.hash.slice(1)||"orders";
   const [r,id]=route.split("/");
   const app=$("#app"); window.scrollTo(0,0);
-  const views={home:vHome,orders:vOrders,order:vOrder,customers:vCustomers,customer:vCustomer,cedit:vCustEdit,stats:vStats,more:vMore,products:vProducts,product:vProduct};
-  const tabOf={order:"orders",customer:"customers",cedit:"customers",products:"more",product:"more"};
+  const views={home:vHome,orders:vOrders,order:vOrder,customers:vCustomers,customer:vCustomer,cedit:vCustEdit,stats:vStats,more:vMore,products:vProducts,product:vProductView,pedit:vProduct};
+  const tabOf={order:"orders",customer:"customers",cedit:"customers",product:"products",pedit:"products",stats:"more"};
   setTab(tabOf[r]||r);
   (views[r]||vHome)(app,id);
   updateBadge();
@@ -310,15 +327,15 @@ let oFilter={q:"",st:"all"};
 function vOrders(app){
   app.innerHTML=`<div class="row"><h2 class="grow">Orders</h2><button class="btn primary" onclick="go('#order/new')">+ New order</button></div>
   <div class="toolbar"><input type="search" id="oq" placeholder="Search customer, number, product…" value="${esc(oFilter.q)}" style="flex:1;min-width:180px">
-  <select id="ost" style="width:auto">${[["all","All"],["order","Not invoiced"],["invoiced","Invoiced"],["unpaid","Unpaid"],["overdue","Overdue"],["cancelled","Cancelled"]].map(([v,l])=>`<option value="${v}" ${oFilter.st===v?"selected":""}>${l}</option>`).join("")}</select></div>
+  <select id="ost" style="width:auto">${[["all","All"],["mine","Mine (from "+fDate(cutoff())+")"],["prev","Before "+fDate(cutoff())+" ("+db.settings.prevSalesman+")"],["unpaid","Unpaid"],["overdue","Overdue"],["cancelled","Cancelled"]].map(([v,l])=>`<option value="${v}" ${oFilter.st===v?"selected":""}>${l}</option>`).join("")}</select></div>
   <div id="olist"></div>`;
   const draw=()=>{
     const q=oFilter.q.toLowerCase();
     let L=live("orders").filter(o=>{
       const st=oFilter.st, p=payState(o);
       if(st==="cancelled"?o.status!=="cancelled":(st!=="all"&&o.status==="cancelled"))return false;
-      if(st==="order"&&o.status!=="order")return false;
-      if(st==="invoiced"&&o.status!=="invoiced")return false;
+      if(st==="mine"&&!isMine(o))return false;
+      if(st==="prev"&&isMine(o))return false;
       if(st==="unpaid"&&!(p&&p.k!=="paid"))return false;
       if(st==="overdue"&&!(p&&p.k==="overdue"))return false;
       if(!q)return true;
@@ -332,9 +349,9 @@ function vOrders(app){
   $("#oq").oninput=e=>{oFilter.q=e.target.value;draw()}; $("#ost").onchange=e=>{oFilter.st=e.target.value;draw()};
   draw();
 }
-function orderItem(o){
-  const items=o.lines.map(l=>`${(prodBySku(l.sku)||{}).name||l.sku} ${nfq.format(l.qty)}`).join(", ");
-  return `<a class="item" href="#order/${o.id}"><div class="grow"><div class="title">${esc(custName(o.customerId))}</div><div class="small muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fDate(o.date)} · ${esc(o.number||"")} · ${esc(items)}</div></div><div class="right"><div class="num">${eur(orderTotal(o))}</div><div>${statusChip(o)} ${payChip(o)}</div></div></a>`;
+function orderItem(o,inCust){
+  const items=o.lines.map(l=>`<div>${esc(prodName(l.sku))} <span class="muted">· ${nfq.format(l.qty)} ql · ${eur(lineNet(l))}/ql</span></div>`).join("");
+  return `<a class="item" href="#order/${o.id}" style="align-items:flex-start"><div class="grow"><div class="title">${inCust?fDate(o.date):esc(custName(o.customerId))+` <span class="small muted" style="font-weight:400">${fDate(o.date)}</span>`}</div><div class="small" style="margin-top:2px">${items}</div></div><div class="right"><div class="num">${eur(orderTotal(o))}</div><div>${statusChip(o)} ${payChip(o)}</div></div></a>`;
 }
 
 let draft=null;
@@ -342,7 +359,7 @@ function vOrder(app,id){
   if(!draft||draft._for!==id){
     if(id==="new"||id&&id.startsWith("new:")){
       const cid=id.startsWith("new:")?id.slice(4):"";
-      draft={id:uid("o"),number:nextOrderNo(),customerId:cid,date:todayStr(),lines:[{sku:"",qty:"",listPrice:"",disc:0}],vat:4,status:"order",invoiceNo:"",invoiceDate:"",termsDays:60,termsType:"FM",trackPayment:false,paid:false,paidDate:"",notes:""};
+      draft={id:uid("o"),number:nextOrderNo(),customerId:cid,date:todayStr(),lines:[{sku:"",qty:"",listPrice:"",disc:0}],vat:4,status:"order",invoiceNo:"",invoiceDate:"",termsDays:60,termsType:"FM",noTrack:false,paid:false,paidDate:"",notes:""};
       if(cid){const prev=custOrders(cid).slice(-1)[0]; if(prev){draft.termsDays=prev.termsDays;draft.termsType=prev.termsType;}}
     } else { const o=byId("orders",id); if(!o){app.innerHTML=`<div class="empty">Order not found</div>`;return} draft=JSON.parse(JSON.stringify(o)); }
     draft._for=id;
@@ -350,13 +367,12 @@ function vOrder(app,id){
   const d=draft, isNew=!byId("orders",d.id);
   const custs=live("customers").sort((a,b)=>a.name.localeCompare(b.name));
   const prods=live("products").sort((a,b)=>a.sku.localeCompare(b.sku));
-  app.innerHTML=`<div class="row"><button class="btn sm" onclick="history.back()">‹ Back</button><h2 class="grow" style="margin:0 0 0 6px">${isNew?"New order":"Order "+esc(d.number||"")}</h2></div>
+  app.innerHTML=`<div class="row"><button class="btn sm" onclick="history.back()">‹ Back</button><h2 class="grow" style="margin:0 0 0 6px">${isNew?"New order":esc(custName(d.customerId))+" · "+fDate(d.date)}</h2></div>
+  ${!isNew&&!isMine(d)?`<div class="small muted" style="margin-top:8px">Order from before ${fDate(cutoff())} (${esc(db.settings.prevSalesman)}): kept for reference, no payment alerts.</div>`:""}
   <div class="card pad" style="margin-top:12px">
    <div class="grid2">
     <label class="f">Customer<select id="f_cust"><option value="">— choose —</option>${custs.map(c=>`<option value="${c.id}" ${c.id===d.customerId?"selected":""}>${esc(c.name)}</option>`).join("")}</select></label>
     <label class="f">Order date<input type="date" id="f_date" value="${d.date}"></label>
-    <label class="f">Order no.<input type="text" id="f_num" value="${esc(d.number)}"></label>
-    <label class="f">Status<select id="f_status">${[["order","Order (not invoiced)"],["invoiced","Invoiced"],["cancelled","Cancelled"]].map(([v,l])=>`<option value="${v}" ${d.status===v?"selected":""}>${l}</option>`).join("")}</select></label>
    </div>
    <h3 style="margin-top:6px">Products</h3>
    <div id="lines"></div>
@@ -367,14 +383,13 @@ function vOrder(app,id){
    <div class="sum" id="sum"></div>
   </div>
   <div class="card pad">
-   <h3 style="margin-top:0">Invoice & payment</h3>
+   <h3 style="margin-top:0">Payment</h3>
    <div class="grid2">
-    <label class="f">Invoice no.<input type="text" id="f_inv" value="${esc(d.invoiceNo)}"></label>
-    <label class="f">Invoice date<input type="date" id="f_invd" value="${d.invoiceDate||""}"></label>
+    <label class="f">Invoice no. (optional)<input type="text" id="f_inv" value="${esc(d.invoiceNo)}"></label>
+    <label class="f">Invoice date (optional)<input type="date" id="f_invd" value="${d.invoiceDate||""}"></label>
     <label class="f">Payment terms (days)<input type="number" id="f_days" value="${d.termsDays}"></label>
-    <label class="f">Counted from<select id="f_tt"><option value="DF" ${d.termsType==="DF"?"selected":""}>DF – invoice date</option><option value="FM" ${d.termsType==="FM"?"selected":""}>FM – end of month</option></select></label>
+    <label class="f">Counted from<select id="f_tt"><option value="DF" ${d.termsType==="DF"?"selected":""}>DF – invoice/order date</option><option value="FM" ${d.termsType==="FM"?"selected":""}>FM – end of month</option></select></label>
    </div>
-   <label class="check"><input type="checkbox" id="f_track" ${tracked(d)?"checked":""} ${d.status==="invoiced"?"disabled":""}> Track payment and alert me (always on for invoiced orders)</label>
    <div class="small muted" id="dueTxt" style="margin-bottom:10px"></div>
    <div class="grid2">
     <label class="check"><input type="checkbox" id="f_paid" ${d.paid?"checked":""}> Paid</label>
@@ -382,34 +397,43 @@ function vOrder(app,id){
    </div>
    <label class="f">Notes<textarea id="f_notes">${esc(d.notes)}</textarea></label>
   </div>
+  <details class="card pad"><summary class="muted small" style="cursor:pointer">More details (order no., cancel, payment alerts)</summary>
+   <div class="grid2" style="margin-top:10px"><label class="f">Order no.<input type="text" id="f_num" value="${esc(d.number)}"></label></div>
+   <label class="check"><input type="checkbox" id="f_canc" ${d.status==="cancelled"?"checked":""}> Order cancelled</label>
+   <label class="check"><input type="checkbox" id="f_notrack" ${d.noTrack?"checked":""}> No payment alerts for this order</label>
+  </details>
   <div class="row wrap" style="margin:8px 0 30px">
    <button class="btn primary" id="save">Save</button>
    ${isNew?"":`<button class="btn" id="dup">Repeat order</button><button class="btn danger" id="del">Delete</button>`}
   </div>
-  <datalist id="skus">${prods.map(p=>`<option value="${esc(p.sku)}">${esc(p.name)}</option>`).join("")}</datalist>`;
+`;
   const read=()=>{
-    d.customerId=$("#f_cust").value; d.date=$("#f_date").value; d.number=$("#f_num").value.trim(); d.status=$("#f_status").value;
+    d.customerId=$("#f_cust").value; d.date=$("#f_date").value; d.number=$("#f_num").value.trim(); d.status=$("#f_canc").checked?"cancelled":"order"; d.noTrack=$("#f_notrack").checked;
     d.vat=+$("#f_vat").value||0; d.invoiceNo=$("#f_inv").value.trim(); d.invoiceDate=$("#f_invd").value;
-    d.termsDays=+$("#f_days").value||0; d.termsType=$("#f_tt").value; d.trackPayment=$("#f_track").checked;
+    d.termsDays=+$("#f_days").value||0; d.termsType=$("#f_tt").value;
     d.paid=$("#f_paid").checked; d.paidDate=$("#f_paidd").value; d.notes=$("#f_notes").value;
   };
   const drawLines=()=>{
-    $("#lines").innerHTML=d.lines.map((l,i)=>`<div class="line"><div class="grid2">
-      <label class="f">Product<select data-i="${i}" data-k="sku"><option value="">— choose —</option>${prods.map(p=>`<option value="${esc(p.sku)}" ${p.sku===l.sku?"selected":""}>${esc(p.sku)} · ${esc(p.name)}</option>`).join("")}</select></label>
-      <label class="f">Quantity (ql)<input type="number" step="any" data-i="${i}" data-k="qty" value="${l.qty}"></label></div>
+    $("#lines").innerHTML=d.lines.map((l,i)=>{const p=prodBySku(l.sku);return `<div class="line">
+      <div class="row" style="align-items:flex-start;margin-bottom:8px"><div class="grow">${l.sku?`<div style="font-weight:650;font-size:16px">${esc(p?p.name:l.sku)}</div><div class="small muted">${esc(l.sku)}${p&&p.description?" · "+esc(p.description):""}${p&&p.category?" · "+esc(p.category):""}</div>`:`<div class="muted">No product chosen</div>`}</div><button class="btn sm" data-pick="${i}">${l.sku?"Change":"Choose product"}</button></div>
+      <div class="hide" data-pk="${i}" style="margin-bottom:10px"><input type="search" placeholder="Type to search products…" data-pq="${i}"><div class="card list" data-pl="${i}" style="max-height:280px;overflow:auto;margin-top:6px"></div></div>
+      <div class="grid3"><label class="f">Quantity (ql)<input type="number" step="any" data-i="${i}" data-k="qty" value="${l.qty}"></label></div>
       <div class="grid3"><label class="f">List price €/ql<input type="number" step="any" data-i="${i}" data-k="listPrice" value="${l.listPrice}"></label>
       <label class="f">Discount %<input type="number" step="any" data-i="${i}" data-k="discp" value="${l.disc?+(l.disc*100).toFixed(4):0}"></label>
       <label class="f">Net price €/ql<input type="number" step="any" data-i="${i}" data-k="net" value="${l.listPrice!==""?+lineNet(l).toFixed(4):""}"></label></div>
-      <div class="row"><span class="small muted grow" data-lt="${i}">Line: ${eur((+l.qty||0)*lineNet(l))}</span>${d.lines.length>1?`<button class="btn sm danger" data-rm="${i}">Remove</button>`:""}</div></div>`).join("");
+      <div class="row"><span class="small muted grow" data-lt="${i}">Line: ${eur((+l.qty||0)*lineNet(l))}</span>${d.lines.length>1?`<button class="btn sm danger" data-rm="${i}">Remove</button>`:""}</div></div>`}).join("");
+    const plist=(i,q)=>{q=(q||"").toLowerCase();$("#lines").querySelector(`[data-pl="${i}"]`).innerHTML=prods.filter(p=>!q||[p.name,p.sku,p.description,p.brand,p.category].join(" ").toLowerCase().includes(q)).map(p=>`<div class="item" data-ps="${esc(p.sku)}" data-pi="${i}"><div class="grow"><div class="title" style="white-space:normal">${esc(p.name)}</div><div class="small muted">${esc(p.sku)}${p.description?" · "+esc(p.description):""}</div></div><span class="num small">${eur(p.price)}</span></div>`).join("")||`<div class="empty">No match</div>`;
+      $("#lines").querySelectorAll(`[data-pi="${i}"]`).forEach(el=>el.onclick=()=>{const l=d.lines[i];l.sku=el.dataset.ps;const pp=prodBySku(l.sku);if(pp)l.listPrice=pp.price;read();drawLines();drawSum();});};
+    const openPick=i=>{const box=$("#lines").querySelector(`[data-pk="${i}"]`);box.classList.remove("hide");plist(i,"");const q=box.querySelector("input");q.oninput=()=>plist(i,q.value);q.focus();};
+    $("#lines").querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>openPick(+b.dataset.pick));
+    d.lines.forEach((l,i)=>{if(!l.sku)openPick(i)});
     $("#lines").querySelectorAll("[data-k]").forEach(el=>el.onchange=e=>{
       const i=+el.dataset.i,k=el.dataset.k,l=d.lines[i],v=el.value;
-      if(k==="sku"){l.sku=v;const p=prodBySku(v);if(p)l.listPrice=p.price;}
-      else if(k==="qty")l.qty=v===""?"":+v;
+      if(k==="qty")l.qty=v===""?"":+v;
       else if(k==="listPrice")l.listPrice=+v||0;
       else if(k==="discp")l.disc=(+v||0)/100;
       else if(k==="net")l.disc=l.listPrice?1-(+v||0)/l.listPrice:0;
       read();
-      if(k==="sku"){setTimeout(()=>{drawLines();drawSum();},0);return}
       const q=s=>$("#lines").querySelector(`[data-i="${i}"][data-k="${s}"]`);
       if(k!=="net")q("net").value=l.listPrice!==""?+lineNet(l).toFixed(4):"";
       if(k!=="discp")q("discp").value=+((l.disc||0)*100).toFixed(4);
@@ -420,12 +444,11 @@ function vOrder(app,id){
   };
   const drawSum=()=>{
     $("#sum").innerHTML=`<b>${ql(orderQty(d))}</b> · net ${eur(orderNet(d))} · <b>total ${eur(orderTotal(d))}</b> incl. IVA`;
-    const p=payState(d); $("#dueTxt").innerHTML=tracked(d)?`Payment due <b>${fDate(dueDate(d))}</b> ${payChip(d)}`:"Payment not tracked for this order.";
+    $("#dueTxt").innerHTML=tracked(d)?`Payment due <b>${fDate(dueDate(d))}</b> ${payChip(d)}`:!isMine(d)?`No payment alerts (order before ${fDate(cutoff())})`:"No payment alerts for this order.";
   };
   drawLines(); drawSum();
   $("#addLine").onclick=()=>{read();d.lines.push({sku:"",qty:"",listPrice:"",disc:0});drawLines();};
-  ["f_date","f_vat","f_invd","f_days","f_tt","f_track","f_paid","f_cust"].forEach(i=>$("#"+i).onchange=()=>{read();drawSum()});
-  $("#f_status").onchange=()=>{read(); if(d.status==="invoiced"&&!d.invoiceDate){d.invoiceDate=todayStr();$("#f_invd").value=d.invoiceDate;} $("#f_track").disabled=d.status==="invoiced"; $("#f_track").checked=tracked(d); drawSum();};
+  ["f_date","f_vat","f_invd","f_days","f_tt","f_notrack","f_canc","f_paid","f_cust"].forEach(i=>$("#"+i).onchange=()=>{read();drawSum()});
   $("#f_paid").onchange=()=>{read(); if(d.paid&&!d.paidDate){d.paidDate=todayStr();$("#f_paidd").value=d.paidDate;} drawSum();};
   $("#save").onclick=()=>{
     read();
@@ -436,7 +459,7 @@ function vOrder(app,id){
   };
   if(!isNew){
     $("#del").onclick=()=>{if(confirm("Delete this order?")){remove("orders",d.id);draft=null;toast("Order deleted");history.back();}};
-    $("#dup").onclick=()=>{read();const n=JSON.parse(JSON.stringify(d));n.id=uid("o");n.number=nextOrderNo();n.date=todayStr();n.status="order";n.invoiceNo="";n.invoiceDate="";n.paid=false;n.paidDate="";n.trackPayment=false;n.notes="";n._for="new";draft=n;history.replaceState(null,"","#order/new");render();};
+    $("#dup").onclick=()=>{read();const n=JSON.parse(JSON.stringify(d));n.id=uid("o");n.number=nextOrderNo();n.date=todayStr();n.status="order";n.invoiceNo="";n.invoiceDate="";n.paid=false;n.paidDate="";n.noTrack=false;n.notes="";n._for="new";draft=n;history.replaceState(null,"","#order/new");render();};
   }
 }
 
@@ -448,7 +471,7 @@ function vCustomers(app){
   const t=todayStr();
   const draw=()=>{
     const q=cQ.toLowerCase();
-    const L=live("customers").filter(c=>!q||[c.name,c.company,c.city,c.contact].join(" ").toLowerCase().includes(q)).map(c=>({c,cy:custCycle(c.id),u:custUnpaid(c.id)}))
+    const L=live("customers").filter(c=>!q||[c.name,c.company,c.city,...(c.contacts||[]).map(k=>k.name)].join(" ").toLowerCase().includes(q)).map(c=>({c,cy:custCycle(c.id),u:custUnpaid(c.id)}))
       .sort((a,b)=>(b.cy.last||"").localeCompare(a.cy.last||"")||a.c.name.localeCompare(b.c.name));
     $("#clist").innerHTML=`<div class="card list">${L.map(({c,cy,u})=>`<a class="item" href="#customer/${c.id}"><div class="grow"><div class="title">${esc(c.name)} ${c.flagged?'<span class="chip red">Flagged</span>':""}</div><div class="small muted">${esc(c.city||"")}${cy.last?" · last "+fDate(cy.last):" · no orders yet"}${cy.cycle?" · every ~"+cy.cycle+" d":""}</div></div><div class="right">${u.over?`<span class="chip red">${eur(u.over)} overdue</span>`:u.tot?`<span class="chip amber">${eur(u.tot)} open</span>`:""}${cy.next&&diffDays(cy.next,t)<=db.settings.alertDays&&diffDays(t,cy.last)<=cy.cycle*3?` <span class="chip blue">order expected</span>`:""}</div></a>`).join("")||`<div class="empty">No customers</div>`}</div>`;
   };
@@ -457,7 +480,7 @@ function vCustomers(app){
 function telLink(n){return n?`<a href="tel:${esc(String(n).replace(/[^\d+]/g,""))}">${esc(n)}</a>`:""}
 function vCustomer(app,id){
   const c=byId("customers",id); if(!c||c.deleted){app.innerHTML=`<div class="empty">Customer not found</div>`;return}
-  const cy=custCycle(id), u=custUnpaid(id), O=custOrders(id).slice().reverse(), t=todayStr();
+  const cy=custCycle(id), u=custUnpaid(id), O=custOrders(id).slice().reverse(), t=todayStr(), mc=mainContact(c);
   const acts=live("activities").filter(a=>a.customerId===id).sort((a,b)=>a.date<b.date?1:-1);
   // monthly chart, last 24 months, by product
   const months=[]; {const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-23);for(let i=0;i<24;i++){months.push(ymd(d).slice(0,7));d.setMonth(d.getMonth()+1);}}
@@ -468,20 +491,35 @@ function vCustomer(app,id){
   <div class="card pad" style="margin-top:12px">
    <div class="title" style="white-space:normal">${esc(c.company||"")}</div>
    <div class="small muted">${esc([c.address,c.cap,c.city,c.prov].filter(Boolean).join(", "))}${c.km?` · ${esc(c.km)} km / ${esc(c.minutes||"?")} min`:""}</div>
-   <div style="margin-top:8px">${esc(c.contact||"")} ${telLink(c.phone)} ${c.phone2?" · "+telLink(c.phone2):""} ${c.email?` · <a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`:""}</div>
+   ${mc?`<div style="margin-top:8px"><b>${esc(mc.name||"")}</b>${mc.role?` <span class="muted small">(${esc(mc.role)})</span>`:""} ${telLink(mc.phone)} ${mc.phone2?" · "+telLink(mc.phone2):""} ${mc.email?` · <a href="mailto:${esc(mc.email)}">${esc(mc.email)}</a>`:""}</div>`:`<div class="small muted" style="margin-top:8px">No contact person yet</div>`}
    ${c.notes?`<div class="small" style="margin-top:8px;white-space:pre-wrap">${esc(c.notes)}</div>`:""}
   </div>
   <div class="kpis">
    <div class="kpi"><div class="v">${cy.last?fDate(cy.last):"—"}</div><div class="l">Last order${cy.last?" · "+diffDays(t,cy.last)+" d ago":""}</div></div>
    <div class="kpi"><div class="v">${cy.cycle?"~"+cy.cycle+" d":"—"}</div><div class="l">Usual cycle${cy.next?" · next ≈ "+fDate(cy.next):""}</div></div>
    <div class="kpi"><div class="v">${ql(yq)}</div><div class="l">Bought in ${year}</div></div>
-   <div class="kpi"><div class="v" style="color:${u.over?"var(--red)":"inherit"}">${eur(u.tot)}</div><div class="l">Unpaid${u.over?" · "+eur(u.over)+" overdue":""}</div></div>
+   <div class="kpi"><div class="v" style="color:${u.over?"var(--red)":"inherit"}">${eur(u.tot)}</div><div class="l">Unpaid since ${fDate(cutoff())}${u.over?" · "+eur(u.over)+" overdue":""}</div></div>
   </div>
   <div class="row wrap" style="margin-bottom:6px"><button class="btn primary" onclick="go('#order/new:${c.id}')">+ New order</button><button class="btn" id="addAct">+ Note / call</button></div>
   <h3>Monthly quantities (ql), last 24 months</h3><div class="card pad">${O.length?stackedBars(months.map(m=>MONTHS[+m.slice(5)-1]+" "+m.slice(2,4)),series,"ql"):`<div class="empty">No orders yet</div>`}</div>
+  <h3>Contacts (${(c.contacts||[]).length})</h3><div class="card list">${(c.contacts||[]).map(k=>`<div class="item" style="cursor:default"><div class="grow"><div class="title">${esc(k.name||"(no name)")} ${k.id===c.mainContact?'<span class="chip green">Main contact</span>':""}</div><div class="small muted">${[k.role,k.phone,k.phone2,k.email].filter(Boolean).map(esc).join(" · ")}</div></div>${k.id===c.mainContact?"":`<button class="btn sm" data-main="${k.id}">Make main</button>`}<button class="btn sm" data-ked="${k.id}">Edit</button></div>`).join("")||`<div class="empty">No contacts yet</div>`}</div>
+  <div class="row" style="margin-top:6px"><button class="btn sm" id="addContact">+ Add contact</button></div><div id="kForm"></div>
   <div id="actForm"></div>
   <h3>Notes & calls</h3><div class="card list">${acts.map(a=>`<div class="item" style="cursor:default"><div class="grow"><div class="small muted">${fDate(a.date)} · ${esc(a.type)}</div><div style="white-space:pre-wrap">${esc(a.text||"")}</div>${a.followUp?`<div class="small">Follow up ${fDate(a.followUp)} ${a.done?'<span class="chip green">done</span>':diffDays(a.followUp,t)<0?'<span class="chip red">due</span>':""}</div>`:""}</div>${a.followUp&&!a.done?`<button class="btn sm" onclick="doneAct('${a.id}')">Done</button>`:""}<button class="btn sm danger" onclick="if(confirm('Delete this note?')){remove('activities','${a.id}');render()}">✕</button></div>`).join("")||`<div class="empty">No notes yet</div>`}</div>
-  <h3>Orders (${O.length})</h3><div class="card list">${O.map(orderItem).join("")||`<div class="empty">No orders</div>`}</div>`;
+  <h3>Orders (${O.length})</h3><div class="card list">${O.map(o=>orderItem(o,true)).join("")||`<div class="empty">No orders</div>`}</div>`;
+  const kForm=k=>{
+    const isNewK=!k; k=k||{id:uid("k"),name:"",role:"",phone:"",phone2:"",email:""};
+    $("#kForm").innerHTML=`<div class="card pad" style="margin-top:10px"><div class="grid2"><label class="f">Name<input type="text" id="k_name" value="${esc(k.name)}"></label><label class="f">Role (owner, office…)<input type="text" id="k_role" value="${esc(k.role)}"></label><label class="f">Phone<input type="tel" id="k_phone" value="${esc(k.phone)}"></label><label class="f">Other phone<input type="tel" id="k_phone2" value="${esc(k.phone2)}"></label><label class="f">Email<input type="email" id="k_email" value="${esc(k.email)}"></label></div>
+    <label class="check"><input type="checkbox" id="k_main" ${k.id===c.mainContact||!(c.contacts||[]).length?"checked":""}> Main contact (shown at the top)</label>
+    <div class="row wrap"><button class="btn primary" id="k_save">Save contact</button><button class="btn" onclick="document.getElementById('kForm').innerHTML=''">Cancel</button>${isNewK?"":`<button class="btn danger" id="k_del">Delete</button>`}</div></div>`;
+    $("#kForm").scrollIntoView({block:"nearest"});
+    $("#k_save").onclick=()=>{for(const f of ["name","role","phone","phone2","email"])k[f]=$("#k_"+f).value.trim(); if(!k.name&&!k.phone){toast("Enter a name or phone");return}
+      const cc=byId("customers",id); cc.contacts=(cc.contacts||[]).filter(x=>x.id!==k.id).concat([k]); if($("#k_main").checked||!cc.mainContact)cc.mainContact=k.id; upsert("customers",cc); toast("Contact saved"); render();};
+    if(!isNewK)$("#k_del").onclick=()=>{if(!confirm("Delete this contact?"))return;const cc=byId("customers",id);cc.contacts=cc.contacts.filter(x=>x.id!==k.id);if(cc.mainContact===k.id)cc.mainContact=cc.contacts.length?cc.contacts[0].id:"";upsert("customers",cc);render();};
+  };
+  $("#addContact").onclick=()=>kForm(null);
+  app.querySelectorAll("[data-ked]").forEach(b=>b.onclick=()=>kForm(JSON.parse(JSON.stringify(c.contacts.find(x=>x.id===b.dataset.ked)))));
+  app.querySelectorAll("[data-main]").forEach(b=>b.onclick=()=>{const cc=byId("customers",id);cc.mainContact=b.dataset.main;upsert("customers",cc);toast("Main contact changed");render();});
   $("#addAct").onclick=()=>{
     $("#actForm").innerHTML=`<div class="card pad" style="margin-top:10px"><div class="grid2"><label class="f">Date<input type="date" id="a_date" value="${t}"></label><label class="f">Type<select id="a_type"><option>call</option><option>visit</option><option>note</option></select></label></div>
     <label class="f">Text<textarea id="a_text"></textarea></label><label class="f">Remind me on (optional)<input type="date" id="a_fu"></label>
@@ -490,11 +528,12 @@ function vCustomer(app,id){
   };
 }
 function vCustEdit(app,id){
-  const isNew=id==="new"; const c=isNew?{id:uid("c"),name:"",company:"",contact:"",phone:"",phone2:"",email:"",address:"",city:"",prov:"",cap:"",km:"",minutes:"",notes:"",flagged:false,inactive:false}:JSON.parse(JSON.stringify(byId("customers",id)||{}));
-  const F=[["name","Short name *"],["company","Company name"],["contact","Contact person"],["phone","Phone","tel"],["phone2","Other phone","tel"],["email","Email","email"],["address","Address"],["city","City"],["prov","Province"],["cap","Postcode"],["km","Km from warehouse"],["minutes","Minutes from warehouse"]];
+  const isNew=id==="new"; const c=isNew?{id:uid("c"),name:"",company:"",contacts:[],mainContact:"",address:"",city:"",prov:"",cap:"",km:"",minutes:"",notes:"",flagged:false,inactive:false}:JSON.parse(JSON.stringify(byId("customers",id)||{}));
+  const F=[["name","Short name *"],["company","Company name"],["address","Address"],["city","City"],["prov","Province"],["cap","Postcode"],["km","Km from warehouse"],["minutes","Minutes from warehouse"]];
   app.innerHTML=`<div class="row"><button class="btn sm" onclick="history.back()">‹ Back</button><h2 class="grow" style="margin:0 0 0 6px">${isNew?"New customer":"Edit "+esc(c.name)}</h2></div>
   <div class="card pad" style="margin-top:12px"><div class="grid2">${F.map(([k,l,ty])=>`<label class="f">${l}<input type="${ty||"text"}" id="c_${k}" value="${esc(c[k]||"")}"></label>`).join("")}</div>
   <label class="f">Notes<textarea id="c_notes">${esc(c.notes||"")}</textarea></label>
+  <div class="small muted" style="margin-bottom:10px">Contact people are managed on the customer's page, under Contacts.</div>
   <label class="check"><input type="checkbox" id="c_flagged" ${c.flagged?"checked":""}> Flagged</label>
   <label class="check"><input type="checkbox" id="c_inactive" ${c.inactive?"checked":""}> Inactive (no order reminders)</label>
   <div class="row"><button class="btn primary" id="c_save">Save</button>${isNew?"":`<button class="btn danger" id="c_del">Delete</button>`}</div></div>`;
@@ -540,32 +579,60 @@ function vStats(app){
 }
 
 /* ---------- views: products ---------- */
+let pQ="";
 function vProducts(app){
-  const P=live("products").sort((a,b)=>(a.brand||"").localeCompare(b.brand||"")||a.sku.localeCompare(b.sku));
-  app.innerHTML=`<div class="row"><button class="btn sm" onclick="go('#more')">‹ Back</button><h2 class="grow" style="margin:0 0 0 6px">Products & prices</h2><button class="btn primary" onclick="go('#product/new')">+ New</button></div>
-  <div class="card list" style="margin-top:12px">${P.map(p=>`<a class="item" href="#product/${p.id}"><div class="grow"><div class="title">${esc(p.name)}</div><div class="small muted">${esc(p.sku)} · ${esc(p.brand||"")}</div></div><div class="num">${eur(p.price)}/ql</div></a>`).join("")}</div>`;
+  app.innerHTML=`<div class="row"><h2 class="grow">Products</h2><button class="btn primary" onclick="go('#pedit/new')">+ New</button></div>
+  <div class="toolbar"><input type="search" id="pq" placeholder="Search name, SKU, description…" value="${esc(pQ)}"></div><div id="plist"></div>`;
+  const draw=()=>{const q=pQ.toLowerCase();
+    const P=live("products").filter(p=>!q||[p.name,p.sku,p.description,p.brand,p.category,p.manufacturer].join(" ").toLowerCase().includes(q)).sort((a,b)=>(a.brand||"").localeCompare(b.brand||"")||a.name.localeCompare(b.name));
+    $("#plist").innerHTML=`<div class="card list">${P.map(p=>`<a class="item" href="#product/${p.id}"><div class="grow"><div class="title" style="white-space:normal">${esc(p.name)}</div><div class="small muted">${[p.sku,p.description,p.category].filter(Boolean).map(esc).join(" · ")}</div></div><div class="num">${eur(p.price)}/ql</div></a>`).join("")||`<div class="empty">No products</div>`}</div>`;};
+  $("#pq").oninput=e=>{pQ=e.target.value;draw()}; draw();
+}
+function vProductView(app,id){
+  if(id==="new"){go("#pedit/new");return}
+  const p=byId("products",id); if(!p||p.deleted){app.innerHTML=`<div class="empty">Product not found</div>`;return}
+  const S=[]; for(const o of live("orders")) if(o.status!=="cancelled") for(const l of o.lines) if(l.sku===p.sku) S.push({o,l});
+  S.sort((a,b)=>a.o.date<b.o.date?1:-1);
+  const sumq=f=>S.filter(f).reduce((s,x)=>s+(+x.l.qty||0),0);
+  const avg=f=>{const r=S.filter(f);const q=r.reduce((s,x)=>s+(+x.l.qty||0),0);return q?r.reduce((s,x)=>s+(+x.l.qty||0)*lineNet(x.l),0)/q:0};
+  const mine=x=>isMine(x.o), prev=x=>!isMine(x.o);
+  app.innerHTML=`<div class="row"><button class="btn sm" onclick="history.back()">‹ Back</button><h2 class="grow" style="margin:0 0 0 6px">${esc(p.name)}</h2><button class="btn sm" onclick="go('#pedit/${p.id}')">Edit</button></div>
+  <div class="card pad" style="margin-top:12px">
+   <div style="font-size:16px">${p.description?esc(p.description):`<span class="muted">No description yet</span>`}</div>
+   <table class="t" style="margin-top:8px"><tr><td class="muted">SKU</td><td>${esc(p.sku)}</td></tr>${p.category?`<tr><td class="muted">Category</td><td>${esc(p.category)}</td></tr>`:""}<tr><td class="muted">Brand</td><td>${esc(p.brand||"")}</td></tr>${p.manufacturer?`<tr><td class="muted">Mill</td><td>${esc(p.manufacturer)}</td></tr>`:""}${p.pack?`<tr><td class="muted">Pack</td><td>${esc(p.pack)}</td></tr>`:""}<tr><td class="muted">List price</td><td>${eur(p.price)}/ql</td></tr></table>
+  </div>
+  <div class="kpis">
+   <div class="kpi"><div class="v">${ql(sumq(mine))}</div><div class="l">Sold since ${fDate(cutoff())}${avg(mine)?" · avg "+eur(avg(mine))+"/ql":""}</div></div>
+   <div class="kpi"><div class="v">${ql(sumq(prev))}</div><div class="l">Sold before (${esc(db.settings.prevSalesman)})${avg(prev)?" · avg "+eur(avg(prev))+"/ql":""}</div></div>
+  </div>
+  <h3>Sales of this product (${S.length})</h3><div class="card scroll"><table class="t"><tr><th>Date</th><th>Customer</th><th class="n">ql</th><th class="n">€/ql net</th><th class="n">Disc.</th></tr>
+  ${S.map(x=>`<tr><td><a href="#order/${x.o.id}">${fDate(x.o.date)}</a> ${isMine(x.o)?"":`<span class="chip">${esc(initials(db.settings.prevSalesman))}</span>`}</td><td>${esc(custName(x.o.customerId))}</td><td class="n">${nfq.format(x.l.qty)}</td><td class="n">${nf2.format(lineNet(x.l))}</td><td class="n">${x.l.disc?nfq.format(Math.round(x.l.disc*1000)/10)+"%":""}</td></tr>`).join("")||`<tr><td colspan="5" class="muted">No sales yet</td></tr>`}</table></div>`;
 }
 function vProduct(app,id){
-  const isNew=id==="new"; const p=isNew?{id:uid("p"),sku:"",name:"",brand:"",price:0,unit:"ql"}:JSON.parse(JSON.stringify(byId("products",id)||{}));
-  app.innerHTML=`<div class="row"><button class="btn sm" onclick="history.back()">‹ Back</button><h2 class="grow" style="margin:0 0 0 6px">${isNew?"New product":esc(p.name)}</h2></div>
+  const isNew=id==="new"; const p=isNew?{id:uid("p"),sku:"",name:"",brand:"",price:0,unit:"ql",description:"",category:"",manufacturer:"",pack:""}:JSON.parse(JSON.stringify(byId("products",id)||{}));
+  app.innerHTML=`<div class="row"><button class="btn sm" onclick="history.back()">‹ Back</button><h2 class="grow" style="margin:0 0 0 6px">${isNew?"New product":"Edit "+esc(p.name)}</h2></div>
   <div class="card pad" style="margin-top:12px"><div class="grid2">
   <label class="f">SKU *<input type="text" id="p_sku" value="${esc(p.sku)}"></label><label class="f">Name *<input type="text" id="p_name" value="${esc(p.name)}"></label>
-  <label class="f">Brand<input type="text" id="p_brand" value="${esc(p.brand)}"></label><label class="f">List price €/ql<input type="number" step="any" id="p_price" value="${p.price}"></label></div>
+  <label class="f">Brand<input type="text" id="p_brand" value="${esc(p.brand)}"></label><label class="f">List price €/ql<input type="number" step="any" id="p_price" value="${p.price}"></label>
+  <label class="f">Description<input type="text" id="p_description" value="${esc(p.description||"")}"></label><label class="f">Category<input type="text" id="p_category" value="${esc(p.category||"")}"></label>
+  <label class="f">Mill / manufacturer<input type="text" id="p_manufacturer" value="${esc(p.manufacturer||"")}"></label><label class="f">Pack<input type="text" id="p_pack" value="${esc(p.pack||"")}"></label></div>
   <div class="small muted" style="margin-bottom:10px">A new list price applies to new orders only; existing orders keep their own prices.</div>
   <div class="row"><button class="btn primary" id="p_save">Save</button>${isNew?"":`<button class="btn danger" id="p_del">Delete</button>`}</div></div>`;
   $("#p_save").onclick=()=>{p.sku=$("#p_sku").value.trim();p.name=$("#p_name").value.trim();p.brand=$("#p_brand").value.trim();p.price=+$("#p_price").value||0;
+    for(const f of ["description","category","manufacturer","pack"])p[f]=$("#p_"+f).value.trim();
     if(!p.sku||!p.name){toast("SKU and name are required");return}
     if(live("products").some(x=>x.sku===p.sku&&x.id!==p.id)){toast("That SKU already exists");return}
-    upsert("products",p);toast("Saved");history.back();};
-  if(!isNew)$("#p_del").onclick=()=>{if(confirm("Delete product? Existing orders are not affected.")){remove("products",p.id);history.back();}};
+    upsert("products",p);toast("Saved");history.replaceState(null,"","#product/"+p.id);render();};
+  if(!isNew)$("#p_del").onclick=()=>{if(confirm("Delete product? Existing orders are not affected.")){remove("products",p.id);go("#products");}};
 }
 
 /* ---------- views: more / settings ---------- */
 function vMore(app){
   const a=auth(), connected=!!(a&&a.refresh);
   app.innerHTML=`<h2>More</h2>
-  <div class="card list"><a class="item" href="#products"><div class="grow"><div class="title">Products & prices</div><div class="small muted">${live("products").length} products</div></div>›</a></div>
-  <h3>Alerts</h3><div class="card pad"><label class="f">Warn me this many days ahead (payments, expected orders, follow-ups)<input type="number" id="s_days" value="${db.settings.alertDays}" style="max-width:120px"></label></div>
+  <div class="card list"><a class="item" href="#stats"><div class="grow"><div class="title">Stats</div><div class="small muted">Sales by month, customer and product</div></div>›</a></div>
+  <h3>Alerts</h3><div class="card pad"><label class="f">Warn me this many days ahead (payments, expected orders, follow-ups)<input type="number" id="s_days" value="${db.settings.alertDays}" style="max-width:120px"></label>
+  <div class="grid2"><label class="f">My orders start on (no payment alerts before this date)<input type="date" id="s_cut" value="${cutoff()}"></label><label class="f">Salesman before that date<input type="text" id="s_prev" value="${esc(db.settings.prevSalesman)}"></label></div></div>
   <h3>Dropbox sync & backup</h3><div class="card pad">
    ${connected?`<div>Connected to Dropbox. Data file: <b>Apps › (your app) › crm-data.json</b>; daily backups in the <b>backups</b> folder.</div>
    <div class="small muted" style="margin:6px 0 10px">Last sync: ${db.meta.lastSync?new Date(db.meta.lastSync).toLocaleString("it-IT"):"never"}${db.meta.dirty?" · changes waiting to sync":""}</div>
@@ -579,15 +646,17 @@ function vMore(app){
    <button class="btn" id="s_exp">Download backup (.json)</button>
    <button class="btn" id="s_csv">Export orders (.csv)</button>
    <label class="btn">Restore from backup…<input type="file" id="s_imp" accept=".json,application/json" class="hide"></label></div>
-   <div class="small muted" style="margin-top:8px">Restoring merges the file with what's on this device (newest version of each record wins).</div></div>
+   <div class="small muted" style="margin-top:8px">Restoring merges the file with what's on this device (newest version of each record wins). Update files from Claude are loaded the same way.</div></div>
   <h3>Display</h3><div class="card pad"><div class="seg" id="theme">${[["auto","Auto"],["light","Light"],["dark","Dark"]].map(([v,l])=>`<button data-v="${v}" class="${(lsGet("crm.theme")||"auto")===v?"on":""}">${l}</button>`).join("")}</div></div>
   <div class="small muted" style="margin:16px 0 30px">Sales CRM v${APP_VERSION} · ${live("customers").length} customers · ${live("orders").length} orders</div>`;
+  $("#s_cut").onchange=e=>{if(!e.target.value)return;db.settings.cutoff=e.target.value;db.settings.updatedAt=nowIso();saveDb();updateBadge();toast("Saved")};
+  $("#s_prev").onchange=e=>{db.settings.prevSalesman=e.target.value.trim();db.settings.updatedAt=nowIso();saveDb();toast("Saved")};
   $("#s_days").onchange=e=>{db.settings.alertDays=Math.max(0,+e.target.value||0);db.settings.updatedAt=nowIso();saveDb();updateBadge();toast("Saved")};
   if(connected){$("#s_sync").onclick=()=>sync(true);$("#s_bk").onclick=()=>backupNow();$("#s_disc").onclick=()=>{if(confirm("Disconnect Dropbox on this device? Your data stays here.")){const x=auth();lsSet(AUTH_KEY,JSON.stringify({appKey:x.appKey}));updateSyncUi();render();}};}
   else $("#s_conn").onclick=()=>{const k=$("#s_key").value.trim();if(!k){toast("Enter the App key first");return}dbxConnect(k);};
   $("#s_exp").onclick=()=>download("crm-backup-"+todayStr()+".json",JSON.stringify(exportData(),null,1),"application/json");
   $("#s_csv").onclick=exportCsv;
-  $("#s_imp").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const data=JSON.parse(r.result);mergeInto(data);saveDb();toast("Backup merged");render();}catch(err){alert("That file could not be read: "+err.message)}};r.readAsText(f);};
+  $("#s_imp").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const data=JSON.parse(r.result);const n=mergeInto(data,true);saveDb();toast(n&&n.patched?n.patched+" records updated":"Backup merged");render();}catch(err){alert("That file could not be read: "+err.message)}};r.readAsText(f);};
   $("#theme").querySelectorAll("button").forEach(b=>b.onclick=()=>{lsSet("crm.theme",b.dataset.v);applyTheme();render();});
 }
 function applyTheme(){const v=lsGet("crm.theme")||"auto";if(v==="auto")document.documentElement.removeAttribute("data-theme");else document.documentElement.setAttribute("data-theme",v);}
@@ -598,15 +667,36 @@ function exportCsv(){
   for(const o of live("orders").sort((a,b)=>a.date<b.date?-1:1)) for(const l of o.lines) rows.push([o.number,o.date,custName(o.customerId),l.sku,(prodBySku(l.sku)||{}).name||"",l.qty,l.listPrice,(l.disc*100).toFixed(2),lineNet(l).toFixed(2),((+l.qty||0)*lineNet(l)).toFixed(2),o.vat,o.status,o.invoiceNo,o.invoiceDate,o.termsDays,o.termsType,tracked(o)?dueDate(o):"",o.paid?"yes":"no",o.paidDate,o.notes]);
   download("orders-"+todayStr()+".csv","﻿"+rows.map(r=>r.map(v=>{v=String(v==null?"":v);return /[";\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}).join(";")).join("\r\n"),"text/csv");
 }
-function mergeInto(remote){
-  let changed=false;
+function normName(n){return String(n||"").toLowerCase().replace(/[^a-z0-9]/g,"")}
+function applyPatch(l,r){
+  for(const [k,v] of Object.entries(r)){
+    if(["id","_patch","contactsAdd","updatedAt"].includes(k))continue;
+    if(v!==""&&v!=null&&!l[k]) l[k]=v; // only fill empty fields, never overwrite your edits
+  }
+  if(r.contactsAdd){ migrateCustomer(l);
+    for(const k of r.contactsAdd){
+      const ex=l.contacts.find(x=>normName(x.name)===normName(k.name));
+      if(ex){for(const f of ["role","phone","phone2","email"]) if(k[f]&&!ex[f]&&![ex.phone,ex.phone2].includes(k[f])) ex[f]=k[f];}
+      else l.contacts.push(Object.assign({id:uid("k"),role:"",phone:"",phone2:"",email:""},k));
+    }
+    if(!l.mainContact&&l.contacts.length)l.mainContact=l.contacts[0].id;
+  }
+  l.updatedAt=nowIso();
+}
+function mergeInto(remote,fromFile){
+  let changed=false, patched=0;
   for(const c of COLS){
     const map=new Map(db[c].map(x=>[x.id,x]));
-    for(const r of (remote[c]||[])){const l=map.get(r.id); if(!l||(r.updatedAt||"")>(l.updatedAt||"")){map.set(r.id,r);changed=true;}}
+    for(const r of (remote[c]||[])){
+      const l=map.get(r.id);
+      if(r._patch){ if(fromFile&&l){applyPatch(l,r);patched++;changed=true;} continue; }
+      if(!l||(r.updatedAt||"")>(l.updatedAt||"")){map.set(r.id,r);changed=true;}
+    }
     db[c]=[...map.values()];
   }
   if(remote.settings&&(remote.settings.updatedAt||"")>(db.settings.updatedAt||"")){db.settings=Object.assign({},db.settings,remote.settings);changed=true;}
-  return changed;
+  normalizeDb();
+  return fromFile?{changed,patched}:changed;
 }
 
 /* ---------- Dropbox (OAuth PKCE + files API) ---------- */
