@@ -125,7 +125,7 @@ svg.chart .grid{stroke:var(--line)}
 <script>
 "use strict";
 const SEED = null;
-const APP_VERSION = "1.2";
+const APP_VERSION = "1.2.1";
 const DB_KEY="crm.db.v1", AUTH_KEY="crm.auth.v1", COLS=["customers","products","orders","activities"];
 const DBX_FILE="/crm-data.json";
 
@@ -344,7 +344,7 @@ function vOrders(app){
     }).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
     const shown=L.slice(0,300);
     $("#olist").innerHTML=`<div class="small muted" style="margin-bottom:6px">${L.length} orders · ${ql(L.reduce((s,o)=>s+orderQty(o),0))} · ${eur(L.reduce((s,o)=>s+orderTotal(o),0))}</div>
-    <div class="card list">${shown.map(orderItem).join("")||`<div class="empty">No orders</div>`}</div>`;
+    <div class="card list">${shown.map(o=>orderItem(o,false)).join("")||`<div class="empty">No orders</div>`}</div>`;
   };
   $("#oq").oninput=e=>{oFilter.q=e.target.value;draw()}; $("#ost").onchange=e=>{oFilter.st=e.target.value;draw()};
   draw();
