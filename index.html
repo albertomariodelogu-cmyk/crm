@@ -131,7 +131,7 @@ svg.chart .grid{stroke:var(--line)}
 <script>
 "use strict";
 const SEED = null;
-const APP_VERSION = "1.11";
+const APP_VERSION = "1.12";
 const DB_KEY="crm.db.v1", AUTH_KEY="crm.auth.v1", COLS=["customers","products","orders","activities"];
 const DBX_FILE="/crm-data.json";
 
@@ -408,7 +408,7 @@ function vOrder(app,id){
   const d=draft, isNew=!byId("orders",d.id);
   const custs=live("customers").sort((a,b)=>byName(a.name,b.name));
   const prods=live("products").sort(byPopularity(soldMap()));
-  app.innerHTML=`<div class="row"><button class="btn sm" onclick="history.back()">‹ Back</button><h2 class="grow" style="margin:0 0 0 6px">${isNew?(d.planned?"New planned order":"New order"):esc(custName(d.customerId))+" · "+fDate(d.date)}</h2>${d.planned?'<span class="chip planned">Planned</span>':""}</div>
+  app.innerHTML=`<div class="row"><button class="btn sm" onclick="history.back()">‹ Back</button><h2 class="grow" style="margin:0 0 0 6px">${isNew?(d.planned?"New planned order":"New order"):esc(custName(d.customerId))+" · "+fDate(d.date)}</h2><span class="chip planned${d.planned?"":" hide"}" id="plChip">Planned</span></div>
   ${!isNew&&!isMine(d)?`<div class="small muted" style="margin-top:8px">Order from before ${fDate(cutoff())} (${esc(db.settings.prevSalesman)}): kept for reference, no payment alerts.</div>`:""}
   <div class="card pad" style="margin-top:12px">
    <div class="grid2">
@@ -494,8 +494,13 @@ function vOrder(app,id){
   drawLines(); drawSum();
   $("#addLine").onclick=()=>{read();d.lines.push({sku:"",qty:"",listPrice:"",disc:0});drawLines();};
   ["f_date","f_vat","f_invd","f_days","f_tt","f_notrack","f_canc","f_paid","f_cust"].forEach(i=>$("#"+i).onchange=()=>{read();drawSum()});
+  const showPlanned=()=>{$("#plChip").classList.toggle("hide",!d.planned); $("#dateLbl").textContent=d.planned?"Planned delivery date":"Order date";};
+  $("#f_date").onchange=()=>{read(); const fut=d.date>todayStr()&&!d.deliveryDate;
+    if(fut&&!d.planned){d.planned=true;d.autoPlanned=true;toast("Future date: this is now a Planned order");}
+    else if(!fut&&d.planned&&d.autoPlanned){d.planned=false;d.autoPlanned=false;}
+    showPlanned(); drawSum();};
   let prevDeliv=d.deliveryDate||"";
-  $("#f_deliv").onchange=()=>{const dv=$("#f_deliv").value; if(dv){$("#f_date").value=dv; $("#f_invd").value=dv; if(d.planned){d.planned=false; $("#dateLbl").textContent="Order date"; toast("No longer planned: now a regular order");}} prevDeliv=$("#f_deliv").value; read(); drawSum();};
+  $("#f_deliv").onchange=()=>{const dv=$("#f_deliv").value; if(dv){$("#f_date").value=dv; $("#f_invd").value=dv; if(d.planned){d.planned=false; d.autoPlanned=false; showPlanned(); toast("No longer planned: now a regular order");}} prevDeliv=$("#f_deliv").value; read(); drawSum();};
   $("#f_paid").onchange=()=>{read(); if(d.paid&&!d.paidDate){d.paidDate=todayStr();$("#f_paidd").value=d.paidDate;} drawSum();};
   $("#save").onclick=()=>{
     read();
