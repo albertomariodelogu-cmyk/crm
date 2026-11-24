@@ -86,8 +86,10 @@ label.f > input,label.f > select,label.f > textarea{margin-top:3px;font-size:15p
 @media (max-width:520px){.grid3{grid-template-columns:1fr 1fr}}
 .check{display:flex;align-items:center;gap:8px;margin:6px 0 12px;font-size:14px}
 .check input{width:18px;height:18px}
-.kpis.custk{grid-template-columns:1fr 1fr 2fr}.kpis.custk .cnotes textarea{resize:vertical}
-@media (max-width:600px){.kpis.custk{grid-template-columns:1fr 1fr}.kpis.custk .cnotes{grid-column:1 / -1}}
+.kpis.custk{grid-template-columns:repeat(3,minmax(96px,max-content)) 1fr;gap:8px}
+.kpis.custk .kpi.sm{padding:7px 10px}.kpis.custk .kpi.sm .v{font-size:16px}.kpis.custk .kpi.sm .l{font-size:11.5px}
+.kpis.custk .cnotes textarea{resize:vertical}
+@media (max-width:600px){.kpis.custk{grid-template-columns:repeat(3,1fr)}.kpis.custk .cnotes{grid-column:1 / -1}}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px}
 .kpi .v{font-size:20px;font-weight:650}
@@ -128,7 +130,7 @@ svg.chart .grid{stroke:var(--line)}
 <script>
 "use strict";
 const SEED = null;
-const APP_VERSION = "1.5";
+const APP_VERSION = "1.6";
 const DB_KEY="crm.db.v1", AUTH_KEY="crm.auth.v1", COLS=["customers","products","orders","activities"];
 const DBX_FILE="/crm-data.json";
 
@@ -234,6 +236,12 @@ function payChip(o){
 function byName(a,b){return String(a).localeCompare(String(b),"it",{sensitivity:"base"})}
 function soldMap(){const m={};for(const o of live("orders"))if(o.status!=="cancelled")for(const l of o.lines)m[l.sku]=(m[l.sku]||0)+(+l.qty||0);return m}
 function byPopularity(m){return (a,b)=>((m[b.sku]||0)-(m[a.sku]||0))||byName(a.name,b.name)}
+function custUnpaidBrand(cid){
+  const r={Lario:{tot:0,over:0},Borgo:{tot:0,over:0}};
+  for(const o of live("orders")) if(o.customerId===cid){const p=payState(o); if(p&&p.k!=="paid"){
+    for(const l of o.lines){const b=isLario(l.sku)?"Lario":"Borgo"; const v=(+l.qty||0)*lineNet(l)*(1+(+o.vat||0)/100); r[b].tot+=v; if(p.k==="overdue")r[b].over+=v;}}}
+  return r;
+}
 function custOrders(cid){return live("orders").filter(o=>o.customerId===cid&&o.status!=="cancelled").sort((a,b)=>a.date<b.date?-1:1)}
 function custCycle(cid){
   const dates=[...new Set(custOrders(cid).map(o=>o.date))].sort();
@@ -500,7 +508,7 @@ function vCustomers(app){
 function telLink(n){return n?`<a href="tel:${esc(String(n).replace(/[^\d+]/g,""))}">${esc(n)}</a>`:""}
 function vCustomer(app,id){
   const c=byId("customers",id); if(!c||c.deleted){app.innerHTML=`<div class="empty">Customer not found</div>`;return}
-  const cy=custCycle(id), u=custUnpaid(id), O=custOrders(id).slice().reverse(), t=todayStr(), mc=mainContact(c);
+  const cy=custCycle(id), u=custUnpaid(id), ub=custUnpaidBrand(id), O=custOrders(id).slice().reverse(), t=todayStr(), mc=mainContact(c);
   const acts=live("activities").filter(a=>a.customerId===id).sort((a,b)=>a.date<b.date?1:-1);
   // monthly chart, last 24 months, by product
   const months=[]; {const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-23);for(let i=0;i<24;i++){months.push(ymd(d).slice(0,7));d.setMonth(d.getMonth()+1);}}
@@ -514,8 +522,8 @@ function vCustomer(app,id){
    ${mc?`<div style="margin-top:8px"><b>${esc(mc.name||"")}</b>${mc.role?` <span class="muted small">(${esc(mc.role)})</span>`:""} ${telLink(mc.phone)} ${mc.phone2?" · "+telLink(mc.phone2):""} ${mc.email?` · <a href="mailto:${esc(mc.email)}">${esc(mc.email)}</a>`:""}</div>`:`<div class="small muted" style="margin-top:8px">No contact person yet</div>`}
   </div>
   <div class="kpis custk">
-   <div class="kpi"><div class="v">${cy.last?fDate(cy.last):"—"}</div><div class="l">Last order${cy.last?" · "+diffDays(t,cy.last)+" d ago":""}</div></div>
-   <div class="kpi"><div class="v" style="color:${u.over?"var(--red)":"inherit"}">${eur(u.tot)}</div><div class="l">Unpaid since ${fDate(cutoff())}${u.over?" · "+eur(u.over)+" overdue":""}</div></div>
+   <div class="kpi sm"><div class="v">${cy.last?fDate(cy.last):"—"}</div><div class="l">Last order${cy.last?"<br>"+diffDays(t,cy.last)+" d ago":""}</div></div>
+   ${["Lario","Borgo"].map(b=>{const x=ub[b];return `<div class="kpi sm"><div class="v" style="color:${x.over?"var(--red)":"inherit"}">${eur(x.tot)}</div><div class="l">Unpaid ${b}<br>since ${fDate(cutoff())}${x.over?"<br>"+eur(x.over)+" overdue":""}</div></div>`}).join("")}
    <div class="kpi cnotes"><div class="l" style="margin-bottom:4px">Notes <span class="muted" id="nSaved"></span></div><textarea id="c_note_live" placeholder="Write anything here — it saves by itself" style="min-height:64px;width:100%">${esc(c.notes||"")}</textarea></div>
   </div>
   <div class="row wrap" style="margin-bottom:6px"><button class="btn primary" onclick="go('#order/new:${c.id}')">+ New order</button></div>
