@@ -128,7 +128,7 @@ svg.chart .grid{stroke:var(--line)}
 <script>
 "use strict";
 const SEED = null;
-const APP_VERSION = "1.4";
+const APP_VERSION = "1.5";
 const DB_KEY="crm.db.v1", AUTH_KEY="crm.auth.v1", COLS=["customers","products","orders","activities"];
 const DBX_FILE="/crm-data.json";
 
@@ -231,6 +231,9 @@ function payChip(o){
   if(p.k==="soon") return `<span class="chip amber">Due ${p.days===0?"today":"in "+p.days+" d"}</span>`;
   return `<span class="chip">Due ${fDate(p.due)}</span>`;
 }
+function byName(a,b){return String(a).localeCompare(String(b),"it",{sensitivity:"base"})}
+function soldMap(){const m={};for(const o of live("orders"))if(o.status!=="cancelled")for(const l of o.lines)m[l.sku]=(m[l.sku]||0)+(+l.qty||0);return m}
+function byPopularity(m){return (a,b)=>((m[b.sku]||0)-(m[a.sku]||0))||byName(a.name,b.name)}
 function custOrders(cid){return live("orders").filter(o=>o.customerId===cid&&o.status!=="cancelled").sort((a,b)=>a.date<b.date?-1:1)}
 function custCycle(cid){
   const dates=[...new Set(custOrders(cid).map(o=>o.date))].sort();
@@ -379,8 +382,8 @@ function vOrder(app,id){
     draft._for=id;
   }
   const d=draft, isNew=!byId("orders",d.id);
-  const custs=live("customers").sort((a,b)=>a.name.localeCompare(b.name));
-  const prods=live("products").sort((a,b)=>a.sku.localeCompare(b.sku));
+  const custs=live("customers").sort((a,b)=>byName(a.name,b.name));
+  const prods=live("products").sort(byPopularity(soldMap()));
   app.innerHTML=`<div class="row"><button class="btn sm" onclick="history.back()">‹ Back</button><h2 class="grow" style="margin:0 0 0 6px">${isNew?"New order":esc(custName(d.customerId))+" · "+fDate(d.date)}</h2></div>
   ${!isNew&&!isMine(d)?`<div class="small muted" style="margin-top:8px">Order from before ${fDate(cutoff())} (${esc(db.settings.prevSalesman)}): kept for reference, no payment alerts.</div>`:""}
   <div class="card pad" style="margin-top:12px">
@@ -489,7 +492,7 @@ function vCustomers(app){
   const draw=()=>{
     const q=cQ.toLowerCase();
     const L=live("customers").filter(c=>!q||[c.name,c.company,c.city,...(c.contacts||[]).map(k=>k.name)].join(" ").toLowerCase().includes(q)).map(c=>({c,cy:custCycle(c.id),u:custUnpaid(c.id)}))
-      .sort((a,b)=>(b.cy.last||"").localeCompare(a.cy.last||"")||a.c.name.localeCompare(b.c.name));
+      .sort((a,b)=>byName(a.c.name,b.c.name));
     $("#clist").innerHTML=`<div class="card list">${L.map(({c,cy,u})=>`<a class="item" href="#customer/${c.id}"><div class="grow"><div class="title">${esc(c.name)}</div><div class="small muted">${esc(c.city||"")}${cy.last?" · last "+fDate(cy.last):" · no orders yet"}${cy.cycle?" · every ~"+cy.cycle+" d":""}</div></div><div class="right">${u.over?`<span class="chip red">${eur(u.over)} overdue</span>`:u.tot?`<span class="chip amber">${eur(u.tot)} open</span>`:""}${cy.next&&diffDays(cy.next,t)<=db.settings.alertDays&&diffDays(t,cy.last)<=cy.cycle*3?` <span class="chip blue">order expected</span>`:""}</div></a>`).join("")||`<div class="empty">No customers</div>`}</div>`;
   };
   $("#cq").oninput=e=>{cQ=e.target.value;draw()}; draw();
@@ -569,10 +572,10 @@ function vStats(app){
   const brands=[...new Set(live("products").map(p=>p.brand||"Other"))];
   const series=brands.map(b=>({name:b,color:b.toLowerCase()==="lario"?WARM[1]:COLD[1],values:months.map(m=>O.filter(o=>o.date.slice(0,7)===m).reduce((s,o)=>s+o.lines.filter(l=>((prodBySku(l.sku)||{}).brand||"Other")===b).reduce((x,l)=>x+val(o,l),0),0))})).filter(s=>s.values.some(v=>v));
   const byC={},byP={}; for(const o of O) for(const l of o.lines){byC[o.customerId]=(byC[o.customerId]||0)+val(o,l);byP[l.sku]=(byP[l.sku]||0)+val(o,l);}
-  const cRows=Object.entries(byC).map(([k,v])=>({label:custName(k),v,href:"#customer/"+k})).sort((a,b)=>b.v-a.v);
+  const cRows=Object.entries(byC).map(([k,v])=>({label:custName(k),v,href:"#customer/"+k})).sort((a,b)=>byName(a.label,b.label));
   const pRows=Object.entries(byP).map(([k,v])=>({label:((prodBySku(k)||{}).name||k)+" ("+k+")",v,color:prodColor(k)})).sort((a,b)=>b.v-a.v);
   // customer x month matrix
-  const custIds=Object.keys(byC).sort((a,b)=>byC[b]-byC[a]);
+  const custIds=Object.keys(byC).sort((a,b)=>byName(custName(a),custName(b)));
   const mat=custIds.map(cid=>({cid,vals:months.map(m=>O.filter(o=>o.customerId===cid&&o.date.slice(0,7)===m).reduce((s,o)=>s+o.lines.reduce((x,l)=>x+val(o,l),0),0))}));
   app.innerHTML=`<h2>Stats</h2>
   <div class="toolbar"><div class="seg" id="per">${[["12m","Last 12 months"],...years.map(y=>[y,y]),["new","New Mgmt"]].map(([v,l])=>`<button data-v="${v}" class="${sPeriod===v?"on":""}">${l}</button>`).join("")}</div>
@@ -592,8 +595,9 @@ let pQ="";
 function vProducts(app){
   app.innerHTML=`<div class="row"><h2 class="grow">Products</h2><button class="btn primary" onclick="go('#pedit/new')">+ New</button></div>
   <div class="toolbar"><input type="search" id="pq" placeholder="Search name, SKU, description…" value="${esc(pQ)}"></div><div id="plist"></div>`;
+  const sm=soldMap();
   const draw=()=>{const q=pQ.toLowerCase();
-    const P=live("products").filter(p=>!q||[p.name,p.sku,p.description,p.brand,p.category,p.manufacturer].join(" ").toLowerCase().includes(q)).sort((a,b)=>(a.brand||"").localeCompare(b.brand||"")||a.name.localeCompare(b.name));
+    const P=live("products").filter(p=>!q||[p.name,p.sku,p.description,p.brand,p.category,p.manufacturer].join(" ").toLowerCase().includes(q)).sort(byPopularity(sm));
     $("#plist").innerHTML=`<div class="card list">${P.map(p=>`<a class="item" href="#product/${p.id}"><div class="grow"><div class="title" style="white-space:normal">${esc(p.name)}</div><div class="small muted">${[p.sku,oneLine(p.description),p.category].filter(Boolean).map(esc).join(" · ")}</div></div><div class="num">${eur(p.price)}/ql</div></a>`).join("")||`<div class="empty">No products</div>`}</div>`;};
   $("#pq").oninput=e=>{pQ=e.target.value;draw()}; draw();
 }
