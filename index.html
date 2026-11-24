@@ -130,7 +130,7 @@ svg.chart .grid{stroke:var(--line)}
 <script>
 "use strict";
 const SEED = null;
-const APP_VERSION = "1.9";
+const APP_VERSION = "1.10";
 const DB_KEY="crm.db.v1", AUTH_KEY="crm.auth.v1", COLS=["customers","products","orders","activities"];
 const DBX_FILE="/crm-data.json";
 
@@ -283,11 +283,23 @@ function nextOrderNo(){
 const WARM=["#E8B400","#F07C1E","#D7263D","#8C1C2E","#7B3FA0"];          // Lario: yellow, orange, red, burgundy, purple
 const COLD=["#3F3DB5","#1E6FD9","#5BB8F0","#14B8A6","#7CCF5B","#1E7B3E"]; // Borgo / Mol.Ind.: indigo, blue, light blue, aqua green, light green, dark green
 function isLario(sku){const p=prodBySku(sku);return p?((p.brand||"").toLowerCase()==="lario"):/^L/.test(sku)}
-function prodColor(sku){
-  const all=live("products").filter(p=>isLario(p.sku)===isLario(sku)).map(p=>p.sku).sort();
-  const pal=isLario(sku)?WARM:COLD; const i=Math.max(0,all.indexOf(sku)); return pal[i%pal.length];
+// Products whose name is a bag colour always get that colour
+function fixedColor(sku){
+  const p=prodBySku(sku); if(!p) return null; const n=(p.name||"").toLowerCase();
+  if(n.includes("verde")) return /00\/s/.test(n)?"#1E7B3E":/0\/s/.test(n)?"#7CCF5B":"#2E9E57";   // Borgo Verde 00 dark green, Verde 0 light green
+  if(n.includes("celeste")) return "#5BB8F0";                                                      // Borgo Rinforzata Celeste
+  if(n.includes("azzurr")) return /\b2\b/.test(n)?"#7EC8F5":"#2F8FE0";                              // Lario Azzurra 1 / 2
+  if(n.includes("arancio")&&isLario(sku)) return /\b2\b/.test(n)?"#F5A04A":"#F07C1E";               // Lario Arancio 1 / 2
+  return null;
 }
-function colorSeries(series){let w=0,c=0; for(const se of series){ if(!se.sku) continue; se.color=isLario(se.sku)?WARM[w++%WARM.length]:COLD[c++%COLD.length]; } return series;}
+const WARM_FREE=["#E8B400","#D7263D","#8C1C2E","#7B3FA0"];   // other Lario: yellow, red, burgundy, purple
+const COLD_FREE=["#3F3DB5","#1E6FD9","#14B8A6"];             // other Borgo/Mol.Ind.: indigo, blue, aqua green
+function prodColor(sku){
+  const f=fixedColor(sku); if(f) return f;
+  const all=live("products").filter(p=>!fixedColor(p.sku)&&isLario(p.sku)===isLario(sku)).map(p=>p.sku).sort();
+  const pal=isLario(sku)?WARM_FREE:COLD_FREE; const i=Math.max(0,all.indexOf(sku)); return pal[i%pal.length];
+}
+function colorSeries(series){let w=0,c=0; for(const se of series){ if(!se.sku) continue; const f=fixedColor(se.sku); se.color=f||(isLario(se.sku)?WARM_FREE[w++%WARM_FREE.length]:COLD_FREE[c++%COLD_FREE.length]); } return series;}
 const PAL=["var(--c1)","var(--c2)","var(--c3)","var(--c4)","var(--c5)","var(--c6)","var(--c7)","var(--c8)"];
 function niceMax(v){if(v<=0)return 1;const p=Math.pow(10,Math.floor(Math.log10(v)));const n=v/p;return (n<=1?1:n<=2?2:n<=5?5:10)*p}
 function stackedBars(labels,series,unit){
