@@ -130,7 +130,7 @@ svg.chart .grid{stroke:var(--line)}
 <script>
 "use strict";
 const SEED = null;
-const APP_VERSION = "1.6";
+const APP_VERSION = "1.7";
 const DB_KEY="crm.db.v1", AUTH_KEY="crm.auth.v1", COLS=["customers","products","orders","activities"];
 const DBX_FILE="/crm-data.json";
 
@@ -237,7 +237,9 @@ function byName(a,b){return String(a).localeCompare(String(b),"it",{sensitivity:
 function soldMap(){const m={};for(const o of live("orders"))if(o.status!=="cancelled")for(const l of o.lines)m[l.sku]=(m[l.sku]||0)+(+l.qty||0);return m}
 function byPopularity(m){return (a,b)=>((m[b.sku]||0)-(m[a.sku]||0))||byName(a.name,b.name)}
 function custUnpaidBrand(cid){
-  const r={Lario:{tot:0,over:0},Borgo:{tot:0,over:0}};
+  const r={Lario:{tot:0,over:0,old:0},Borgo:{tot:0,over:0,old:0}};
+  for(const o of live("orders")) if(o.customerId===cid&&o.status!=="cancelled"&&!isMine(o)&&!isPaid(o))
+    for(const l of o.lines){const b=isLario(l.sku)?"Lario":"Borgo"; r[b].old+=(+l.qty||0)*lineNet(l)*(1+(+o.vat||0)/100);}
   for(const o of live("orders")) if(o.customerId===cid){const p=payState(o); if(p&&p.k!=="paid"){
     for(const l of o.lines){const b=isLario(l.sku)?"Lario":"Borgo"; const v=(+l.qty||0)*lineNet(l)*(1+(+o.vat||0)/100); r[b].tot+=v; if(p.k==="overdue")r[b].over+=v;}}}
   return r;
@@ -523,7 +525,7 @@ function vCustomer(app,id){
   </div>
   <div class="kpis custk">
    <div class="kpi sm"><div class="v">${cy.last?fDate(cy.last):"—"}</div><div class="l">Last order${cy.last?"<br>"+diffDays(t,cy.last)+" d ago":""}</div></div>
-   ${["Lario","Borgo"].map(b=>{const x=ub[b];return `<div class="kpi sm"><div class="v" style="color:${x.over?"var(--red)":"inherit"}">${eur(x.tot)}</div><div class="l">Unpaid ${b}<br>since ${fDate(cutoff())}${x.over?"<br>"+eur(x.over)+" overdue":""}</div></div>`}).join("")}
+   ${["Lario","Borgo"].map(b=>{const x=ub[b];return `<div class="kpi sm"><div class="v" style="color:${x.over?"var(--red)":"inherit"}">${eur(x.tot)}</div><div class="l">Unpaid ${b}<br>since ${fDate(cutoff())}${x.over?"<br>"+eur(x.over)+" overdue":""}</div><div class="l" style="margin-top:5px;padding-top:4px;border-top:1px solid var(--line)">Old mgmt (before ${fDate(cutoff())})<br><b style="color:${x.old?"var(--red)":"inherit"}">${eur(x.old)}</b></div></div>`}).join("")}
    <div class="kpi cnotes"><div class="l" style="margin-bottom:4px">Notes <span class="muted" id="nSaved"></span></div><textarea id="c_note_live" placeholder="Write anything here — it saves by itself" style="min-height:64px;width:100%">${esc(c.notes||"")}</textarea></div>
   </div>
   <div class="row wrap" style="margin-bottom:6px"><button class="btn primary" onclick="go('#order/new:${c.id}')">+ New order</button></div>
