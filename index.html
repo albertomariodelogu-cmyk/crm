@@ -130,7 +130,7 @@ svg.chart .grid{stroke:var(--line)}
 <script>
 "use strict";
 const SEED = null;
-const APP_VERSION = "1.8";
+const APP_VERSION = "1.8.1";
 const DB_KEY="crm.db.v1", AUTH_KEY="crm.auth.v1", COLS=["customers","products","orders","activities"];
 const DBX_FILE="/crm-data.json";
 
@@ -436,7 +436,7 @@ function vOrder(app,id){
   </div>
 `;
   const read=()=>{
-    d.customerId=$("#f_cust").value; d.deliveryDate=$("#f_deliv").value; if(d.deliveryDate) $("#f_date").value=d.deliveryDate; d.date=$("#f_date").value; d.number=$("#f_num").value.trim(); d.status=$("#f_canc").checked?"cancelled":"order"; d.noTrack=$("#f_notrack").checked;
+    d.customerId=$("#f_cust").value; d.deliveryDate=$("#f_deliv").value; if(d.deliveryDate){ $("#f_date").value=d.deliveryDate; } d.date=$("#f_date").value; d.number=$("#f_num").value.trim(); d.status=$("#f_canc").checked?"cancelled":"order"; d.noTrack=$("#f_notrack").checked;
     d.vat=+$("#f_vat").value||0; d.invoiceNo=$("#f_inv").value.trim(); d.invoiceDate=$("#f_invd").value;
     d.termsDays=+$("#f_days").value||0; d.termsType=$("#f_tt").value;
     d.paid=$("#f_paid").checked; d.paidDate=$("#f_paidd").value; d.notes=$("#f_notes").value;
@@ -478,7 +478,7 @@ function vOrder(app,id){
   $("#addLine").onclick=()=>{read();d.lines.push({sku:"",qty:"",listPrice:"",disc:0});drawLines();};
   ["f_date","f_vat","f_invd","f_days","f_tt","f_notrack","f_canc","f_paid","f_cust"].forEach(i=>$("#"+i).onchange=()=>{read();drawSum()});
   let prevDeliv=d.deliveryDate||"";
-  $("#f_deliv").onchange=()=>{if($("#f_deliv").value)$("#f_date").value=$("#f_deliv").value; const inv=$("#f_invd"); if(!inv.value||inv.value===prevDeliv) inv.value=$("#f_deliv").value; prevDeliv=$("#f_deliv").value; read(); drawSum();};
+  $("#f_deliv").onchange=()=>{const dv=$("#f_deliv").value; if(dv){$("#f_date").value=dv; $("#f_invd").value=dv;} prevDeliv=$("#f_deliv").value; read(); drawSum();};
   $("#f_paid").onchange=()=>{read(); if(d.paid&&!d.paidDate){d.paidDate=todayStr();$("#f_paidd").value=d.paidDate;} drawSum();};
   $("#save").onclick=()=>{
     read();
