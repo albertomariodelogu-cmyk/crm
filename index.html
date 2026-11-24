@@ -14,7 +14,7 @@
   --bg:#f5f4f0; --surface:#ffffff; --surface2:#efeee9; --text:#1d1f1e; --muted:#6a6f6c; --line:#dcdad3;
   --accent:#1f5c45; --accent-ink:#ffffff; --accent-soft:#e1efe8;
   --red:#b3261e; --red-soft:#fbe4e1; --amber:#9a5b00; --amber-soft:#fdf0d8; --blue:#1d5fa8; --blue-soft:#e2ecf8; --green:#1e7a4c; --green-soft:#e0f2e8;
-  --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#8a5cd1; --c5:#d4a20c; --c6:#d1497b; --c7:#4aa3b5; --c8:#7a7f7c;
+  --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#8a5cd1; --c5:#d4a20c; --c6:#d1497b; --c7:#4aa3b5; --c8:#1E7B3E;
   --radius:10px; --shadow:0 1px 2px rgba(0,0,0,.06),0 2px 8px rgba(0,0,0,.04);
 }
 @media (prefers-color-scheme: dark){
@@ -86,6 +86,8 @@ label.f > input,label.f > select,label.f > textarea{margin-top:3px;font-size:15p
 @media (max-width:520px){.grid3{grid-template-columns:1fr 1fr}}
 .check{display:flex;align-items:center;gap:8px;margin:6px 0 12px;font-size:14px}
 .check input{width:18px;height:18px}
+.kpis.custk{grid-template-columns:1fr 1fr 2fr}.kpis.custk .cnotes textarea{resize:vertical}
+@media (max-width:600px){.kpis.custk{grid-template-columns:1fr 1fr}.kpis.custk .cnotes{grid-column:1 / -1}}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px}
 .kpi .v{font-size:20px;font-weight:650}
@@ -126,7 +128,7 @@ svg.chart .grid{stroke:var(--line)}
 <script>
 "use strict";
 const SEED = null;
-const APP_VERSION = "1.3";
+const APP_VERSION = "1.4";
 const DB_KEY="crm.db.v1", AUTH_KEY="crm.auth.v1", COLS=["customers","products","orders","activities"];
 const DBX_FILE="/crm-data.json";
 
@@ -265,10 +267,18 @@ function nextOrderNo(){
 }
 
 /* ---------- charts (inline SVG) ---------- */
+const WARM=["#E8B400","#F07C1E","#D7263D","#8C1C2E","#7B3FA0"];          // Lario: yellow, orange, red, burgundy, purple
+const COLD=["#3F3DB5","#1E6FD9","#5BB8F0","#14B8A6","#7CCF5B","#1E7B3E"]; // Borgo / Mol.Ind.: indigo, blue, light blue, aqua green, light green, dark green
+function isLario(sku){const p=prodBySku(sku);return p?((p.brand||"").toLowerCase()==="lario"):/^L/.test(sku)}
+function prodColor(sku){
+  const all=live("products").filter(p=>isLario(p.sku)===isLario(sku)).map(p=>p.sku).sort();
+  const pal=isLario(sku)?WARM:COLD; const i=Math.max(0,all.indexOf(sku)); return pal[i%pal.length];
+}
+function colorSeries(series){let w=0,c=0; for(const se of series){ if(!se.sku) continue; se.color=isLario(se.sku)?WARM[w++%WARM.length]:COLD[c++%COLD.length]; } return series;}
 const PAL=["var(--c1)","var(--c2)","var(--c3)","var(--c4)","var(--c5)","var(--c6)","var(--c7)","var(--c8)"];
 function niceMax(v){if(v<=0)return 1;const p=Math.pow(10,Math.floor(Math.log10(v)));const n=v/p;return (n<=1?1:n<=2?2:n<=5?5:10)*p}
 function stackedBars(labels,series,unit){
-  const W=Math.max(560,labels.length*50+50),H=220,L=44,B=24,T=10,cw=(W-L-8)/labels.length;
+  const W=Math.max(320,labels.length*50+50),H=220,L=44,B=24,T=10,cw=(W-L-8)/labels.length;
   const tot=labels.map((_,i)=>series.reduce((s,se)=>s+Math.max(0,se.values[i]||0),0));
   const mx=niceMax(Math.max(...tot,0)); const y=v=>T+(H-T-B)*(1-v/mx);
   let g=""; for(let k=0;k<=4;k++){const v=mx*k/4;g+=`<line class="grid" x1="${L}" x2="${W-4}" y1="${y(v)}" y2="${y(v)}"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end">${nfq.format(v)}</text>`}
@@ -277,11 +287,11 @@ function stackedBars(labels,series,unit){
     if(labels.length<=31 && (labels.length<=14||i%2===0)) bars+=`<text x="${x+w/2}" y="${H-8}" text-anchor="middle">${esc(lab)}</text>`;
   });
   const leg=series.length>1?`<div class="legend">${series.map((s,i)=>`<span><i style="background:${s.color||PAL[i%8]}"></i>${esc(s.name)}</span>`).join("")}</div>`:"";
-  return `<div class="scroll"><svg class="chart" viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${Math.min(W,560)}px;max-height:260px">${g}${bars}</svg></div>${leg}`;
+  return `<div class="scroll"><svg class="chart" viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${labels.length>8?Math.min(W,560):0}px;max-height:260px">${g}${bars}</svg></div>${leg}`;
 }
 function hBars(rows,fmt){
   const mx=Math.max(...rows.map(r=>r.v),0)||1;
-  return rows.map(r=>`<div style="margin:6px 0"><div class="row small"><span class="grow">${esc(r.label)}</span><span class="num">${fmt(r.v)}</span></div><div style="height:7px;background:var(--surface2);border-radius:4px"><div style="height:7px;border-radius:4px;background:var(--c1);width:${(r.v/mx*100).toFixed(1)}%"></div></div></div>`).join("");
+  return rows.map(r=>`<${r.href?`a href="${r.href}" style="display:block;margin:6px 0;color:inherit;text-decoration:none"`:'div style="margin:6px 0"'}><div class="row small"><span class="grow">${esc(r.label)}</span><span class="num">${fmt(r.v)}</span></div><div style="height:7px;background:var(--surface2);border-radius:4px"><div style="height:7px;border-radius:4px;background:${r.color||"var(--c1)"};width:${(r.v/mx*100).toFixed(1)}%"></div></div></${r.href?"a":"div"}>`).join("");
 }
 
 /* ---------- router ---------- */
@@ -320,7 +330,7 @@ function vHome(app){
   h+=`<h3>Payments overdue</h3><div class="card list">${A.overdue.map(orderRow).join("")||`<div class="empty">Nothing overdue</div>`}</div>`;
   h+=`<h3>Payments due within ${N} days</h3><div class="card list">${A.soon.map(orderRow).join("")||`<div class="empty">Nothing due soon</div>`}</div>`;
   h+=`<h3>Follow-ups</h3><div class="card list">${A.follow.map(a=>`<div class="item" data-act="${a.id}"><div class="grow" onclick="go('#customer/${a.customerId}')"><div class="title">${esc(custName(a.customerId))}</div><div class="small muted">${esc(a.text||"")}</div></div><span class="chip ${diffDays(a.followUp,t)<0?"red":"amber"}">${fDate(a.followUp)}</span><button class="btn sm" onclick="doneAct('${a.id}')">Done</button></div>`).join("")||`<div class="empty">No follow-ups due</div>`}</div>`;
-  h+=`<h3>Orders expected</h3><div class="card list">${A.expected.map(x=>`<a class="item" href="#customer/${x.c.id}"><div class="grow"><div class="title">${esc(x.c.name)} ${x.c.flagged?'<span class="chip red">Flagged</span>':""}</div><div class="small muted">Last order ${fDate(x.cy.last)} · every ~${x.cy.cycle} d</div></div><span class="chip ${x.until<0?"red":"blue"}">${x.until<0?"expected "+(-x.until)+" d ago":x.until===0?"expected today":"in "+x.until+" d"}</span></a>`).join("")||`<div class="empty">No orders expected in the next ${N} days</div>`}</div>`;
+  h+=`<h3>Orders expected</h3><div class="card list">${A.expected.map(x=>`<a class="item" href="#customer/${x.c.id}"><div class="grow"><div class="title">${esc(x.c.name)}</div><div class="small muted">Last order ${fDate(x.cy.last)} · every ~${x.cy.cycle} d</div></div><span class="chip ${x.until<0?"red":"blue"}">${x.until<0?"expected "+(-x.until)+" d ago":x.until===0?"expected today":"in "+x.until+" d"}</span></a>`).join("")||`<div class="empty">No orders expected in the next ${N} days</div>`}</div>`;
   if(A.lapsed.length) h+=`<h3>Not ordering lately</h3><div class="card list">${A.lapsed.map(x=>`<a class="item" href="#customer/${x.c.id}"><div class="grow"><div class="title">${esc(x.c.name)}</div><div class="small muted">Usually every ~${x.cy.cycle} d</div></div><span class="chip">last ${fDate(x.cy.last)}</span></a>`).join("")}</div>`;
   app.innerHTML=h;
 }
@@ -480,7 +490,7 @@ function vCustomers(app){
     const q=cQ.toLowerCase();
     const L=live("customers").filter(c=>!q||[c.name,c.company,c.city,...(c.contacts||[]).map(k=>k.name)].join(" ").toLowerCase().includes(q)).map(c=>({c,cy:custCycle(c.id),u:custUnpaid(c.id)}))
       .sort((a,b)=>(b.cy.last||"").localeCompare(a.cy.last||"")||a.c.name.localeCompare(b.c.name));
-    $("#clist").innerHTML=`<div class="card list">${L.map(({c,cy,u})=>`<a class="item" href="#customer/${c.id}"><div class="grow"><div class="title">${esc(c.name)} ${c.flagged?'<span class="chip red">Flagged</span>':""}</div><div class="small muted">${esc(c.city||"")}${cy.last?" · last "+fDate(cy.last):" · no orders yet"}${cy.cycle?" · every ~"+cy.cycle+" d":""}</div></div><div class="right">${u.over?`<span class="chip red">${eur(u.over)} overdue</span>`:u.tot?`<span class="chip amber">${eur(u.tot)} open</span>`:""}${cy.next&&diffDays(cy.next,t)<=db.settings.alertDays&&diffDays(t,cy.last)<=cy.cycle*3?` <span class="chip blue">order expected</span>`:""}</div></a>`).join("")||`<div class="empty">No customers</div>`}</div>`;
+    $("#clist").innerHTML=`<div class="card list">${L.map(({c,cy,u})=>`<a class="item" href="#customer/${c.id}"><div class="grow"><div class="title">${esc(c.name)}</div><div class="small muted">${esc(c.city||"")}${cy.last?" · last "+fDate(cy.last):" · no orders yet"}${cy.cycle?" · every ~"+cy.cycle+" d":""}</div></div><div class="right">${u.over?`<span class="chip red">${eur(u.over)} overdue</span>`:u.tot?`<span class="chip amber">${eur(u.tot)} open</span>`:""}${cy.next&&diffDays(cy.next,t)<=db.settings.alertDays&&diffDays(t,cy.last)<=cy.cycle*3?` <span class="chip blue">order expected</span>`:""}</div></a>`).join("")||`<div class="empty">No customers</div>`}</div>`;
   };
   $("#cq").oninput=e=>{cQ=e.target.value;draw()}; draw();
 }
@@ -492,27 +502,23 @@ function vCustomer(app,id){
   // monthly chart, last 24 months, by product
   const months=[]; {const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-23);for(let i=0;i<24;i++){months.push(ymd(d).slice(0,7));d.setMonth(d.getMonth()+1);}}
   const skus=[...new Set(O.flatMap(o=>o.lines.map(l=>l.sku)))];
-  const series=skus.map(s=>({name:(prodBySku(s)||{}).name||s,values:months.map(m=>O.filter(o=>o.date.slice(0,7)===m).reduce((a,o)=>a+o.lines.filter(l=>l.sku===s).reduce((x,l)=>x+(+l.qty||0),0),0))}));
+  const series=skus.map(s=>({sku:s,name:(prodBySku(s)||{}).name||s,values:months.map(m=>O.filter(o=>o.date.slice(0,7)===m).reduce((a,o)=>a+o.lines.filter(l=>l.sku===s).reduce((x,l)=>x+(+l.qty||0),0),0))}));
   const year=t.slice(0,4); const yq=O.filter(o=>o.date.startsWith(year)).reduce((s,o)=>s+orderQty(o),0);
-  app.innerHTML=`<div class="row"><button class="btn sm" onclick="history.back()">‹ Back</button><h2 class="grow" style="margin:0 0 0 6px">${esc(c.name)} ${c.flagged?'<span class="chip red">Flagged</span>':""}</h2><button class="btn sm" onclick="go('#cedit/${c.id}')">Edit</button></div>
+  app.innerHTML=`<div class="row"><button class="btn sm" onclick="history.back()">‹ Back</button><h2 class="grow" style="margin:0 0 0 6px">${esc(c.name)}</h2><button class="btn sm" onclick="go('#cedit/${c.id}')">Edit</button></div>
   <div class="card pad" style="margin-top:12px">
    <div class="title" style="white-space:normal">${esc(c.company||"")}</div>
    <div class="small muted">${esc([c.address,c.cap,c.city,c.prov].filter(Boolean).join(", "))}${c.km?` · ${esc(c.km)} km / ${esc(c.minutes||"?")} min`:""}</div>
    ${mc?`<div style="margin-top:8px"><b>${esc(mc.name||"")}</b>${mc.role?` <span class="muted small">(${esc(mc.role)})</span>`:""} ${telLink(mc.phone)} ${mc.phone2?" · "+telLink(mc.phone2):""} ${mc.email?` · <a href="mailto:${esc(mc.email)}">${esc(mc.email)}</a>`:""}</div>`:`<div class="small muted" style="margin-top:8px">No contact person yet</div>`}
-   ${c.notes?`<div class="small" style="margin-top:8px;white-space:pre-wrap">${esc(c.notes)}</div>`:""}
   </div>
-  <div class="kpis">
+  <div class="kpis custk">
    <div class="kpi"><div class="v">${cy.last?fDate(cy.last):"—"}</div><div class="l">Last order${cy.last?" · "+diffDays(t,cy.last)+" d ago":""}</div></div>
-   <div class="kpi"><div class="v">${cy.cycle?"~"+cy.cycle+" d":"—"}</div><div class="l">Usual cycle${cy.next?" · next ≈ "+fDate(cy.next):""}</div></div>
-   <div class="kpi"><div class="v">${ql(yq)}</div><div class="l">Bought in ${year}</div></div>
    <div class="kpi"><div class="v" style="color:${u.over?"var(--red)":"inherit"}">${eur(u.tot)}</div><div class="l">Unpaid since ${fDate(cutoff())}${u.over?" · "+eur(u.over)+" overdue":""}</div></div>
+   <div class="kpi cnotes"><div class="l" style="margin-bottom:4px">Notes <span class="muted" id="nSaved"></span></div><textarea id="c_note_live" placeholder="Write anything here — it saves by itself" style="min-height:64px;width:100%">${esc(c.notes||"")}</textarea></div>
   </div>
-  <div class="row wrap" style="margin-bottom:6px"><button class="btn primary" onclick="go('#order/new:${c.id}')">+ New order</button><button class="btn" id="addAct">+ Note / call</button></div>
-  <h3>Monthly quantities (ql), last 24 months</h3><div class="card pad">${O.length?stackedBars(months.map(m=>MONTHS[+m.slice(5)-1]+" "+m.slice(2,4)),series,"ql"):`<div class="empty">No orders yet</div>`}</div>
+  <div class="row wrap" style="margin-bottom:6px"><button class="btn primary" onclick="go('#order/new:${c.id}')">+ New order</button></div>
+  <h3>Monthly quantities (ql), last 24 months</h3><div class="card pad">${O.length?stackedBars(months.map(m=>MONTHS[+m.slice(5)-1]+" "+m.slice(2,4)),colorSeries(series),"ql"):`<div class="empty">No orders yet</div>`}</div>
   <h3>Contacts (${(c.contacts||[]).length})</h3><div class="card list">${(c.contacts||[]).map(k=>`<div class="item" style="cursor:default"><div class="grow"><div class="title">${esc(k.name||"(no name)")} ${k.id===c.mainContact?'<span class="chip green">Main contact</span>':""}</div><div class="small muted">${[k.role,k.phone,k.phone2,k.email].filter(Boolean).map(esc).join(" · ")}</div></div>${k.id===c.mainContact?"":`<button class="btn sm" data-main="${k.id}">Make main</button>`}<button class="btn sm" data-ked="${k.id}">Edit</button></div>`).join("")||`<div class="empty">No contacts yet</div>`}</div>
   <div class="row" style="margin-top:6px"><button class="btn sm" id="addContact">+ Add contact</button></div><div id="kForm"></div>
-  <div id="actForm"></div>
-  <h3>Notes & calls</h3><div class="card list">${acts.map(a=>`<div class="item" style="cursor:default"><div class="grow"><div class="small muted">${fDate(a.date)} · ${esc(a.type)}</div><div style="white-space:pre-wrap">${esc(a.text||"")}</div>${a.followUp?`<div class="small">Follow up ${fDate(a.followUp)} ${a.done?'<span class="chip green">done</span>':diffDays(a.followUp,t)<0?'<span class="chip red">due</span>':""}</div>`:""}</div>${a.followUp&&!a.done?`<button class="btn sm" onclick="doneAct('${a.id}')">Done</button>`:""}<button class="btn sm danger" onclick="if(confirm('Delete this note?')){remove('activities','${a.id}');render()}">✕</button></div>`).join("")||`<div class="empty">No notes yet</div>`}</div>
   <h3>Orders (${O.length})</h3><div class="card list">${O.map(o=>orderItem(o,true)).join("")||`<div class="empty">No orders</div>`}</div>`;
   const kForm=k=>{
     const isNewK=!k; k=k||{id:uid("k"),name:"",role:"",phone:"",phone2:"",email:""};
@@ -527,12 +533,7 @@ function vCustomer(app,id){
   $("#addContact").onclick=()=>kForm(null);
   app.querySelectorAll("[data-ked]").forEach(b=>b.onclick=()=>kForm(JSON.parse(JSON.stringify(c.contacts.find(x=>x.id===b.dataset.ked)))));
   app.querySelectorAll("[data-main]").forEach(b=>b.onclick=()=>{const cc=byId("customers",id);cc.mainContact=b.dataset.main;upsert("customers",cc);toast("Main contact changed");render();});
-  $("#addAct").onclick=()=>{
-    $("#actForm").innerHTML=`<div class="card pad" style="margin-top:10px"><div class="grid2"><label class="f">Date<input type="date" id="a_date" value="${t}"></label><label class="f">Type<select id="a_type"><option>call</option><option>visit</option><option>note</option></select></label></div>
-    <label class="f">Text<textarea id="a_text"></textarea></label><label class="f">Remind me on (optional)<input type="date" id="a_fu"></label>
-    <div class="row"><button class="btn primary" id="a_save">Save note</button><button class="btn" onclick="document.getElementById('actForm').innerHTML=''">Cancel</button></div></div>`;
-    $("#a_save").onclick=()=>{upsert("activities",{id:uid("a"),customerId:id,date:$("#a_date").value,type:$("#a_type").value,text:$("#a_text").value,followUp:$("#a_fu").value,done:false});toast("Saved");render();};
-  };
+  let nT=null; $("#c_note_live").oninput=e=>{clearTimeout(nT); $("#nSaved").textContent="· saving…"; nT=setTimeout(()=>{const cc=byId("customers",id); cc.notes=e.target.value; upsert("customers",cc); $("#nSaved").textContent="· saved";},700);};
 }
 function vCustEdit(app,id){
   const isNew=id==="new"; const c=isNew?{id:uid("c"),name:"",company:"",contacts:[],mainContact:"",address:"",city:"",prov:"",cap:"",km:"",minutes:"",notes:"",flagged:false,inactive:false}:JSON.parse(JSON.stringify(byId("customers",id)||{}));
@@ -558,6 +559,7 @@ function vStats(app){
   const t=todayStr(), years=[...new Set(live("orders").map(o=>o.date.slice(0,4)))].sort().reverse();
   let from,to=t,months=[];
   if(sPeriod==="12m"){const d=parseD(t);d.setDate(1);d.setMonth(d.getMonth()-11);from=ymd(d);}
+  else if(sPeriod==="new"){from=cutoff();}
   else {from=sPeriod+"-01-01";to=sPeriod+"-12-31";}
   {const d=parseD(from);d.setDate(1);while(ymd(d).slice(0,7)<=to.slice(0,7)){months.push(ymd(d).slice(0,7));d.setMonth(d.getMonth()+1);}}
   const O=live("orders").filter(o=>o.status!=="cancelled"&&o.date>=from&&o.date<=to);
@@ -565,15 +567,15 @@ function vStats(app){
   const fmt=v=>sMeasure==="qty"?ql(v):eur(v);
   const totQ=O.reduce((s,o)=>s+orderQty(o),0), totN=O.reduce((s,o)=>s+orderNet(o),0);
   const brands=[...new Set(live("products").map(p=>p.brand||"Other"))];
-  const series=brands.map(b=>({name:b,values:months.map(m=>O.filter(o=>o.date.slice(0,7)===m).reduce((s,o)=>s+o.lines.filter(l=>((prodBySku(l.sku)||{}).brand||"Other")===b).reduce((x,l)=>x+val(o,l),0),0))})).filter(s=>s.values.some(v=>v));
+  const series=brands.map(b=>({name:b,color:b.toLowerCase()==="lario"?WARM[1]:COLD[1],values:months.map(m=>O.filter(o=>o.date.slice(0,7)===m).reduce((s,o)=>s+o.lines.filter(l=>((prodBySku(l.sku)||{}).brand||"Other")===b).reduce((x,l)=>x+val(o,l),0),0))})).filter(s=>s.values.some(v=>v));
   const byC={},byP={}; for(const o of O) for(const l of o.lines){byC[o.customerId]=(byC[o.customerId]||0)+val(o,l);byP[l.sku]=(byP[l.sku]||0)+val(o,l);}
-  const cRows=Object.entries(byC).map(([k,v])=>({label:custName(k),v})).sort((a,b)=>b.v-a.v);
-  const pRows=Object.entries(byP).map(([k,v])=>({label:((prodBySku(k)||{}).name||k)+" ("+k+")",v})).sort((a,b)=>b.v-a.v);
+  const cRows=Object.entries(byC).map(([k,v])=>({label:custName(k),v,href:"#customer/"+k})).sort((a,b)=>b.v-a.v);
+  const pRows=Object.entries(byP).map(([k,v])=>({label:((prodBySku(k)||{}).name||k)+" ("+k+")",v,color:prodColor(k)})).sort((a,b)=>b.v-a.v);
   // customer x month matrix
   const custIds=Object.keys(byC).sort((a,b)=>byC[b]-byC[a]);
   const mat=custIds.map(cid=>({cid,vals:months.map(m=>O.filter(o=>o.customerId===cid&&o.date.slice(0,7)===m).reduce((s,o)=>s+o.lines.reduce((x,l)=>x+val(o,l),0),0))}));
   app.innerHTML=`<h2>Stats</h2>
-  <div class="toolbar"><div class="seg" id="per">${[["12m","Last 12 months"],...years.map(y=>[y,y])].map(([v,l])=>`<button data-v="${v}" class="${sPeriod===v?"on":""}">${l}</button>`).join("")}</div>
+  <div class="toolbar"><div class="seg" id="per">${[["12m","Last 12 months"],...years.map(y=>[y,y]),["new","New Mgmt"]].map(([v,l])=>`<button data-v="${v}" class="${sPeriod===v?"on":""}">${l}</button>`).join("")}</div>
   <div class="seg" id="mea"><button data-v="qty" class="${sMeasure==="qty"?"on":""}">Quintals</button><button data-v="eur" class="${sMeasure==="eur"?"on":""}">€ net</button></div></div>
   <div class="kpis"><div class="kpi"><div class="v">${ql(totQ)}</div><div class="l">Quantity</div></div><div class="kpi"><div class="v">${eur(totN)}</div><div class="l">Net sales (excl. IVA)</div></div><div class="kpi"><div class="v">${O.length}</div><div class="l">Orders</div></div><div class="kpi"><div class="v">${Object.keys(byC).length}</div><div class="l">Customers buying</div></div></div>
   <h3>By month</h3><div class="card pad">${stackedBars(months.map(m=>MONTHS[+m.slice(5)-1]+" "+m.slice(2,4)),series,sMeasure==="qty"?"ql":"€")}</div>
