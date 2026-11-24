@@ -70,6 +70,7 @@ h3{font-size:15px;margin:18px 0 8px;color:var(--muted);font-weight:600;text-tran
 .title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip{display:inline-block;font-size:12px;padding:1px 8px;border-radius:10px;background:var(--surface2);color:var(--muted);white-space:nowrap;font-weight:500}
 .chip.paid{background:var(--green);color:#fff}.chip.unpaid{background:var(--red);color:#fff}
+.chip.planned{background:#F2C200;color:#3a2f00}.item.planned,.item.planned *:not(.chip){color:#62676a!important}
 .chip.red{background:var(--red-soft);color:var(--red)}.chip.amber{background:var(--amber-soft);color:var(--amber)}.chip.blue{background:var(--blue-soft);color:var(--blue)}.chip.green{background:var(--green-soft);color:var(--green)}
 .btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 14px;cursor:pointer;white-space:nowrap}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
@@ -130,7 +131,7 @@ svg.chart .grid{stroke:var(--line)}
 <script>
 "use strict";
 const SEED = null;
-const APP_VERSION = "1.10";
+const APP_VERSION = "1.11";
 const DB_KEY="crm.db.v1", AUTH_KEY="crm.auth.v1", COLS=["customers","products","orders","activities"];
 const DBX_FILE="/crm-data.json";
 
@@ -198,7 +199,7 @@ function orderNet(o){return o.lines.reduce((s,l)=>s+(+l.qty||0)*lineNet(l),0)}
 function orderTotal(o){return orderNet(o)*(1+(+o.vat||0)/100)}
 function cutoff(){return db.settings.cutoff||"2026-09-01"}
 function isMine(o){return (o.date||"")>=cutoff()}
-function tracked(o){return o.status!=="cancelled" && !o.noTrack && isMine(o)}
+function tracked(o){return o.status!=="cancelled" && !o.planned && !o.noTrack && isMine(o)}
 function dueDate(o){
   const base=o.invoiceDate||o.deliveryDate||o.date; if(!base) return null;
   const days=+o.termsDays||0;
@@ -225,7 +226,7 @@ function initials(n){return String(n||"").split(/\s+/).filter(Boolean).map(w=>w[
 function oneLine(t){return String(t||"").replace(/\s*\n\s*/g," · ")}
 function prodName(sku){return (prodBySku(sku)||{}).name||sku}
 function isPaid(o){ return isMine(o) ? !!o.paid : !(o.invoiceNo && !o.paid); }
-function paidChip(o){ if(o.status==="cancelled") return ""; return isPaid(o)?`<span class="chip paid">PAID</span>`:`<span class="chip unpaid">UNPAID</span>`; }
+function paidChip(o){ if(o.status==="cancelled"||o.planned) return ""; return isPaid(o)?`<span class="chip paid">PAID</span>`:`<span class="chip unpaid">UNPAID</span>`; }
 function payChip(o){
   const p=payState(o); if(!p) return "";
   if(p.k==="paid") return `<span class="chip green">Paid</span>`;
@@ -234,7 +235,7 @@ function payChip(o){
   return `<span class="chip">Due ${fDate(p.due)}</span>`;
 }
 function byName(a,b){return String(a).localeCompare(String(b),"it",{sensitivity:"base"})}
-function soldMap(){const m={};for(const o of live("orders"))if(o.status!=="cancelled")for(const l of o.lines)m[l.sku]=(m[l.sku]||0)+(+l.qty||0);return m}
+function soldMap(){const m={};for(const o of live("orders"))if(o.status!=="cancelled"&&!o.planned)for(const l of o.lines)m[l.sku]=(m[l.sku]||0)+(+l.qty||0);return m}
 function byPopularity(m){return (a,b)=>((m[b.sku]||0)-(m[a.sku]||0))||byName(a.name,b.name)}
 function custUnpaidBrand(cid){
   const r={Lario:{tot:0,over:0,old:0},Borgo:{tot:0,over:0,old:0}};
@@ -246,7 +247,7 @@ function custUnpaidBrand(cid){
 }
 function custOrders(cid){return live("orders").filter(o=>o.customerId===cid&&o.status!=="cancelled").sort((a,b)=>a.date<b.date?-1:1)}
 function custCycle(cid){
-  const dates=[...new Set(custOrders(cid).map(o=>o.date))].sort();
+  const dates=[...new Set(custOrders(cid).filter(o=>!o.planned).map(o=>o.date))].sort();
   const last=dates[dates.length-1]||null;
   if(dates.length<2) return {last,cycle:null,next:null,count:dates.length};
   const gaps=[]; for(let i=1;i<dates.length;i++) gaps.push(diffDays(dates[i],dates[i-1]));
@@ -364,15 +365,16 @@ function doneAct(id){const a=byId("activities",id);if(a){a.done=true;upsert("act
 /* ---------- views: orders ---------- */
 let oFilter={q:"",st:"all"};
 function vOrders(app){
-  app.innerHTML=`<div class="row"><h2 class="grow">Orders</h2><button class="btn primary" onclick="go('#order/new')">+ New order</button></div>
+  app.innerHTML=`<div class="row"><h2 class="grow">Orders</h2><button class="btn" onclick="go('#order/planned')">+ Planned order</button><button class="btn primary" onclick="go('#order/new')" style="margin-left:8px">+ New order</button></div>
   <div class="toolbar"><input type="search" id="oq" placeholder="Search customer, number, product…" value="${esc(oFilter.q)}" style="flex:1;min-width:180px">
-  <select id="ost" style="width:auto">${[["all","All"],["mine","Mine (from "+fDate(cutoff())+")"],["prev","Before "+fDate(cutoff())+" ("+db.settings.prevSalesman+")"],["unpaid","Unpaid"],["overdue","Overdue"],["cancelled","Cancelled"]].map(([v,l])=>`<option value="${v}" ${oFilter.st===v?"selected":""}>${l}</option>`).join("")}</select></div>
+  <select id="ost" style="width:auto">${[["all","All"],["mine","Mine (from "+fDate(cutoff())+")"],["prev","Before "+fDate(cutoff())+" ("+db.settings.prevSalesman+")"],["unpaid","Unpaid"],["overdue","Overdue"],["planned","Planned"],["cancelled","Cancelled"]].map(([v,l])=>`<option value="${v}" ${oFilter.st===v?"selected":""}>${l}</option>`).join("")}</select></div>
   <div id="olist"></div>`;
   const draw=()=>{
     const q=oFilter.q.toLowerCase();
     let L=live("orders").filter(o=>{
       const st=oFilter.st, p=payState(o);
       if(st==="cancelled"?o.status!=="cancelled":(st!=="all"&&o.status==="cancelled"))return false;
+      if(st==="planned"&&!o.planned)return false;
       if(st==="mine"&&!isMine(o))return false;
       if(st==="prev"&&isMine(o))return false;
       if(st==="unpaid"&&!(p&&p.k!=="paid"))return false;
@@ -390,15 +392,15 @@ function vOrders(app){
 }
 function orderItem(o,inCust){
   const items=o.lines.map(l=>`<div>${esc(prodName(l.sku))} <span class="muted">· ${nfq.format(l.qty)} ql · ${eur(lineNet(l))}/ql</span></div>`).join("");
-  return `<a class="item" href="#order/${o.id}" style="align-items:flex-start"><div class="grow"><div class="title">${inCust?fDate(o.date):esc(custName(o.customerId))+` <span class="small muted" style="font-weight:400">${fDate(o.date)}</span>`}</div><div class="small" style="margin-top:2px">${items}</div></div><div class="right"><div class="num">${eur(orderTotal(o))}</div><div>${statusChip(o)} ${inCust?paidChip(o)+(isPaid(o)?"":" "+payChip(o)):payChip(o)}</div></div></a>`;
+  return `<a class="item${o.planned?" planned":""}" href="#order/${o.id}" style="align-items:flex-start"><div class="grow"><div class="title">${inCust?fDate(o.date):esc(custName(o.customerId))+` <span class="small muted" style="font-weight:400">${fDate(o.date)}</span>`}</div><div class="small" style="margin-top:2px">${items}</div></div><div class="right"><div class="num">${eur(orderTotal(o))}</div>${o.planned?`<div><span class="chip planned">Planned</span></div>`:""}<div>${statusChip(o)} ${inCust?paidChip(o)+(isPaid(o)?"":" "+payChip(o)):payChip(o)}</div></div></a>`;
 }
 
 let draft=null;
 function vOrder(app,id){
   if(!draft||draft._for!==id){
-    if(id==="new"||id&&id.startsWith("new:")){
-      const cid=id.startsWith("new:")?id.slice(4):"";
-      draft={id:uid("o"),number:nextOrderNo(),customerId:cid,date:todayStr(),lines:[{sku:"",qty:"",listPrice:"",disc:0}],vat:4,status:"order",invoiceNo:"",invoiceDate:"",termsDays:60,termsType:"FM",noTrack:false,paid:false,paidDate:"",notes:""};
+    if(id==="new"||id==="planned"||id&&(id.startsWith("new:")||id.startsWith("planned:"))){
+      const cid=id.includes(":")?id.split(":")[1]:"";
+      draft={id:uid("o"),number:nextOrderNo(),customerId:cid,date:todayStr(),lines:[{sku:"",qty:"",listPrice:"",disc:0}],vat:4,status:"order",invoiceNo:"",invoiceDate:"",termsDays:60,termsType:"FM",noTrack:false,paid:false,paidDate:"",notes:"",planned:id.startsWith("planned")};
       if(cid){const prev=custOrders(cid).slice(-1)[0]; if(prev){draft.termsDays=prev.termsDays;draft.termsType=prev.termsType;}}
     } else { const o=byId("orders",id); if(!o){app.innerHTML=`<div class="empty">Order not found</div>`;return} draft=JSON.parse(JSON.stringify(o)); }
     draft._for=id;
@@ -406,12 +408,12 @@ function vOrder(app,id){
   const d=draft, isNew=!byId("orders",d.id);
   const custs=live("customers").sort((a,b)=>byName(a.name,b.name));
   const prods=live("products").sort(byPopularity(soldMap()));
-  app.innerHTML=`<div class="row"><button class="btn sm" onclick="history.back()">‹ Back</button><h2 class="grow" style="margin:0 0 0 6px">${isNew?"New order":esc(custName(d.customerId))+" · "+fDate(d.date)}</h2></div>
+  app.innerHTML=`<div class="row"><button class="btn sm" onclick="history.back()">‹ Back</button><h2 class="grow" style="margin:0 0 0 6px">${isNew?(d.planned?"New planned order":"New order"):esc(custName(d.customerId))+" · "+fDate(d.date)}</h2>${d.planned?'<span class="chip planned">Planned</span>':""}</div>
   ${!isNew&&!isMine(d)?`<div class="small muted" style="margin-top:8px">Order from before ${fDate(cutoff())} (${esc(db.settings.prevSalesman)}): kept for reference, no payment alerts.</div>`:""}
   <div class="card pad" style="margin-top:12px">
    <div class="grid2">
     <label class="f">Customer<select id="f_cust"><option value="">— choose —</option>${custs.map(c=>`<option value="${c.id}" ${c.id===d.customerId?"selected":""}>${esc(c.name)}</option>`).join("")}</select></label>
-    <label class="f">Order date<input type="date" id="f_date" value="${d.date}"></label>
+    <label class="f"><span id="dateLbl">${d.planned?"Planned delivery date":"Order date"}</span><input type="date" id="f_date" value="${d.date}"></label>
     <label class="f">Delivery date<input type="date" id="f_deliv" value="${d.deliveryDate||""}"></label>
    </div>
    <h3 style="margin-top:6px">Products</h3>
@@ -448,7 +450,7 @@ function vOrder(app,id){
   </div>
 `;
   const read=()=>{
-    d.customerId=$("#f_cust").value; d.deliveryDate=$("#f_deliv").value; if(d.deliveryDate){ $("#f_date").value=d.deliveryDate; } d.date=$("#f_date").value; d.number=$("#f_num").value.trim(); d.status=$("#f_canc").checked?"cancelled":"order"; d.noTrack=$("#f_notrack").checked;
+    d.customerId=$("#f_cust").value; d.deliveryDate=$("#f_deliv").value; if(d.deliveryDate){ $("#f_date").value=d.deliveryDate; d.planned=false; } d.date=$("#f_date").value; d.number=$("#f_num").value.trim(); d.status=$("#f_canc").checked?"cancelled":"order"; d.noTrack=$("#f_notrack").checked;
     d.vat=+$("#f_vat").value||0; d.invoiceNo=$("#f_inv").value.trim(); d.invoiceDate=$("#f_invd").value;
     d.termsDays=+$("#f_days").value||0; d.termsType=$("#f_tt").value;
     d.paid=$("#f_paid").checked; d.paidDate=$("#f_paidd").value; d.notes=$("#f_notes").value;
@@ -493,7 +495,7 @@ function vOrder(app,id){
   $("#addLine").onclick=()=>{read();d.lines.push({sku:"",qty:"",listPrice:"",disc:0});drawLines();};
   ["f_date","f_vat","f_invd","f_days","f_tt","f_notrack","f_canc","f_paid","f_cust"].forEach(i=>$("#"+i).onchange=()=>{read();drawSum()});
   let prevDeliv=d.deliveryDate||"";
-  $("#f_deliv").onchange=()=>{const dv=$("#f_deliv").value; if(dv){$("#f_date").value=dv; $("#f_invd").value=dv;} prevDeliv=$("#f_deliv").value; read(); drawSum();};
+  $("#f_deliv").onchange=()=>{const dv=$("#f_deliv").value; if(dv){$("#f_date").value=dv; $("#f_invd").value=dv; if(d.planned){d.planned=false; $("#dateLbl").textContent="Order date"; toast("No longer planned: now a regular order");}} prevDeliv=$("#f_deliv").value; read(); drawSum();};
   $("#f_paid").onchange=()=>{read(); if(d.paid&&!d.paidDate){d.paidDate=todayStr();$("#f_paidd").value=d.paidDate;} drawSum();};
   $("#save").onclick=()=>{
     read();
@@ -504,7 +506,7 @@ function vOrder(app,id){
   };
   if(!isNew){
     $("#del").onclick=()=>{if(confirm("Delete this order?")){remove("orders",d.id);draft=null;toast("Order deleted");history.back();}};
-    $("#dup").onclick=()=>{read();const n=JSON.parse(JSON.stringify(d));n.id=uid("o");n.number=nextOrderNo();n.date=todayStr();n.status="order";n.invoiceNo="";n.invoiceDate="";n.paid=false;n.paidDate="";n.noTrack=false;n.notes="";n._for="new";draft=n;history.replaceState(null,"","#order/new");render();};
+    $("#dup").onclick=()=>{read();const n=JSON.parse(JSON.stringify(d));n.id=uid("o");n.number=nextOrderNo();n.date=todayStr();n.status="order";n.planned=false;n.deliveryDate="";n.invoiceNo="";n.invoiceDate="";n.paid=false;n.paidDate="";n.noTrack=false;n.notes="";n._for="new";draft=n;history.replaceState(null,"","#order/new");render();};
   }
 }
 
@@ -530,7 +532,7 @@ function vCustomer(app,id){
   // monthly chart, last 24 months, by product
   const months=[]; {const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-23);for(let i=0;i<24;i++){months.push(ymd(d).slice(0,7));d.setMonth(d.getMonth()+1);}}
   const skus=[...new Set(O.flatMap(o=>o.lines.map(l=>l.sku)))];
-  const series=skus.map(s=>({sku:s,name:(prodBySku(s)||{}).name||s,values:months.map(m=>O.filter(o=>o.date.slice(0,7)===m).reduce((a,o)=>a+o.lines.filter(l=>l.sku===s).reduce((x,l)=>x+(+l.qty||0),0),0))}));
+  const series=skus.map(s=>({sku:s,name:(prodBySku(s)||{}).name||s,values:months.map(m=>O.filter(o=>!o.planned&&o.date.slice(0,7)===m).reduce((a,o)=>a+o.lines.filter(l=>l.sku===s).reduce((x,l)=>x+(+l.qty||0),0),0))}));
   const year=t.slice(0,4); const yq=O.filter(o=>o.date.startsWith(year)).reduce((s,o)=>s+orderQty(o),0);
   app.innerHTML=`<div class="row"><button class="btn sm" onclick="history.back()">‹ Back</button><h2 class="grow" style="margin:0 0 0 6px">${esc(c.name)}</h2><button class="btn sm" onclick="go('#cedit/${c.id}')">Edit</button></div>
   <div class="card pad" style="margin-top:12px">
@@ -543,7 +545,7 @@ function vCustomer(app,id){
    ${["Lario","Borgo"].map(b=>{const x=ub[b];return `<div class="kpi sm"><div class="v" style="color:${x.over?"var(--red)":"inherit"}">${eur(x.tot)}</div><div class="l">Unpaid ${b}<br>since ${fDate(cutoff())}${x.over?"<br>"+eur(x.over)+" overdue":""}</div><div class="l" style="margin-top:5px;padding-top:4px;border-top:1px solid var(--line)">Old mgmt (before ${fDate(cutoff())})<br><b style="color:${x.old?"var(--red)":"inherit"}">${eur(x.old)}</b></div></div>`}).join("")}
    <div class="kpi cnotes"><div class="l" style="margin-bottom:4px">Notes <span class="muted" id="nSaved"></span></div><textarea id="c_note_live" placeholder="Write anything here — it saves by itself" style="min-height:64px;width:100%">${esc(c.notes||"")}</textarea></div>
   </div>
-  <div class="row wrap" style="margin-bottom:6px"><button class="btn primary" onclick="go('#order/new:${c.id}')">+ New order</button></div>
+  <div class="row wrap" style="margin-bottom:6px"><button class="btn primary" onclick="go('#order/new:${c.id}')">+ New order</button><button class="btn" onclick="go('#order/planned:${c.id}')">+ Planned order</button></div>
   <h3>Monthly quantities (ql), last 24 months</h3><div class="card pad">${O.length?stackedBars(months.map(m=>MONTHS[+m.slice(5)-1]+" "+m.slice(2,4)),colorSeries(series),"ql"):`<div class="empty">No orders yet</div>`}</div>
   <h3>Contacts (${(c.contacts||[]).length})</h3><div class="card list">${(c.contacts||[]).map(k=>`<div class="item" style="cursor:default"><div class="grow"><div class="title">${esc(k.name||"(no name)")} ${k.id===c.mainContact?'<span class="chip green">Main contact</span>':""}</div><div class="small muted">${[k.role,k.phone,k.phone2,k.email].filter(Boolean).map(esc).join(" · ")}</div></div>${k.id===c.mainContact?"":`<button class="btn sm" data-main="${k.id}">Make main</button>`}<button class="btn sm" data-ked="${k.id}">Edit</button></div>`).join("")||`<div class="empty">No contacts yet</div>`}</div>
   <div class="row" style="margin-top:6px"><button class="btn sm" id="addContact">+ Add contact</button></div><div id="kForm"></div>
@@ -590,7 +592,7 @@ function vStats(app){
   else if(sPeriod==="new"){from=cutoff();}
   else {from=sPeriod+"-01-01";to=sPeriod+"-12-31";}
   {const d=parseD(from);d.setDate(1);while(ymd(d).slice(0,7)<=to.slice(0,7)){months.push(ymd(d).slice(0,7));d.setMonth(d.getMonth()+1);}}
-  const O=live("orders").filter(o=>o.status!=="cancelled"&&o.date>=from&&o.date<=to);
+  const O=live("orders").filter(o=>o.status!=="cancelled"&&!o.planned&&o.date>=from&&o.date<=to);
   const val=(o,l)=>sMeasure==="qty"?(+l.qty||0):(+l.qty||0)*lineNet(l);
   const fmt=v=>sMeasure==="qty"?ql(v):eur(v);
   const totQ=O.reduce((s,o)=>s+orderQty(o),0), totN=O.reduce((s,o)=>s+orderNet(o),0);
@@ -629,7 +631,7 @@ function vProducts(app){
 function vProductView(app,id){
   if(id==="new"){go("#pedit/new");return}
   const p=byId("products",id); if(!p||p.deleted){app.innerHTML=`<div class="empty">Product not found</div>`;return}
-  const S=[]; for(const o of live("orders")) if(o.status!=="cancelled") for(const l of o.lines) if(l.sku===p.sku) S.push({o,l});
+  const S=[]; for(const o of live("orders")) if(o.status!=="cancelled"&&!o.planned) for(const l of o.lines) if(l.sku===p.sku) S.push({o,l});
   S.sort((a,b)=>a.o.date<b.o.date?1:-1);
   const sumq=f=>S.filter(f).reduce((s,x)=>s+(+x.l.qty||0),0);
   const avg=f=>{const r=S.filter(f);const q=r.reduce((s,x)=>s+(+x.l.qty||0),0);return q?r.reduce((s,x)=>s+(+x.l.qty||0)*lineNet(x.l),0)/q:0};
