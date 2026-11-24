@@ -130,7 +130,7 @@ svg.chart .grid{stroke:var(--line)}
 <script>
 "use strict";
 const SEED = null;
-const APP_VERSION = "1.8.1";
+const APP_VERSION = "1.9";
 const DB_KEY="crm.db.v1", AUTH_KEY="crm.auth.v1", COLS=["customers","products","orders","activities"];
 const DBX_FILE="/crm-data.json";
 
@@ -448,6 +448,7 @@ function vOrder(app,id){
       <div class="grid3"><label class="f">Quantity (ql)<input type="number" step="any" data-i="${i}" data-k="qty" value="${l.qty}"></label></div>
       <div class="grid3"><label class="f">List price €/ql<input type="number" step="any" data-i="${i}" data-k="listPrice" value="${l.listPrice}"></label>
       <label class="f">Discount %<input type="number" step="any" data-i="${i}" data-k="discp" value="${l.disc?+(l.disc*100).toFixed(4):0}"></label>
+      <label class="f">Discount €/ql<input type="number" step="any" data-i="${i}" data-k="disce" value="${l.listPrice!==""?+((+l.listPrice||0)*(l.disc||0)).toFixed(4):""}"></label>
       <label class="f">Net price €/ql<input type="number" step="any" data-i="${i}" data-k="net" value="${l.listPrice!==""?+lineNet(l).toFixed(4):""}"></label></div>
       <div class="row"><span class="small muted grow" data-lt="${i}">Line: ${eur((+l.qty||0)*lineNet(l))}</span>${d.lines.length>1?`<button class="btn sm danger" data-rm="${i}">Remove</button>`:""}</div></div>`}).join("");
     const plist=(i,q)=>{q=(q||"").toLowerCase();$("#lines").querySelector(`[data-pl="${i}"]`).innerHTML=prods.filter(p=>!q||[p.name,p.sku,p.description,p.brand,p.category].join(" ").toLowerCase().includes(q)).map(p=>`<div class="item" data-ps="${esc(p.sku)}" data-pi="${i}"><div class="grow"><div class="title" style="white-space:normal">${esc(p.name)}</div><div class="small muted">${esc(p.sku)}${p.description?" · "+esc(oneLine(p.description)):""}</div></div><span class="num small">${eur(p.price)}</span></div>`).join("")||`<div class="empty">No match</div>`;
@@ -460,11 +461,13 @@ function vOrder(app,id){
       if(k==="qty")l.qty=v===""?"":+v;
       else if(k==="listPrice")l.listPrice=+v||0;
       else if(k==="discp")l.disc=(+v||0)/100;
+      else if(k==="disce")l.disc=l.listPrice?(+v||0)/l.listPrice:0;
       else if(k==="net")l.disc=l.listPrice?1-(+v||0)/l.listPrice:0;
       read();
       const q=s=>$("#lines").querySelector(`[data-i="${i}"][data-k="${s}"]`);
       if(k!=="net")q("net").value=l.listPrice!==""?+lineNet(l).toFixed(4):"";
       if(k!=="discp")q("discp").value=+((l.disc||0)*100).toFixed(4);
+      if(k!=="disce")q("disce").value=l.listPrice!==""?+((+l.listPrice||0)*(l.disc||0)).toFixed(4):"";
       $("#lines").querySelector(`[data-lt="${i}"]`).textContent="Line: "+eur((+l.qty||0)*lineNet(l));
       drawSum();
     });
