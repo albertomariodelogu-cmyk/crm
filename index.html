@@ -70,7 +70,7 @@ h3{font-size:15px;margin:18px 0 8px;color:var(--muted);font-weight:600;text-tran
 .title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip{display:inline-block;font-size:12px;padding:1px 8px;border-radius:10px;background:var(--surface2);color:var(--muted);white-space:nowrap;font-weight:500}
 .chip.paid{background:var(--green);color:#fff}.chip.unpaid{background:var(--red);color:#fff}
-.chip.planned{background:#F2C200;color:#3a2f00}.item.planned,.item.planned *:not(.chip){color:#62676a!important}
+.chip.planned{background:#F2C200;color:#3a2f00}.item.planned,.item.planned *:not(.chip){color:#9aa0a3!important}
 .chip.red{background:var(--red-soft);color:var(--red)}.chip.amber{background:var(--amber-soft);color:var(--amber)}.chip.blue{background:var(--blue-soft);color:var(--blue)}.chip.green{background:var(--green-soft);color:var(--green)}
 .btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 14px;cursor:pointer;white-space:nowrap}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
@@ -131,7 +131,7 @@ svg.chart .grid{stroke:var(--line)}
 <script>
 "use strict";
 const SEED = null;
-const APP_VERSION = "1.12";
+const APP_VERSION = "1.13";
 const DB_KEY="crm.db.v1", AUTH_KEY="crm.auth.v1", COLS=["customers","products","orders","activities"];
 const DBX_FILE="/crm-data.json";
 
@@ -309,10 +309,11 @@ function stackedBars(labels,series,unit){
   const mx=niceMax(Math.max(...tot,0)); const y=v=>T+(H-T-B)*(1-v/mx);
   let g=""; for(let k=0;k<=4;k++){const v=mx*k/4;g+=`<line class="grid" x1="${L}" x2="${W-4}" y1="${y(v)}" y2="${y(v)}"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end">${nfq.format(v)}</text>`}
   let bars=""; labels.forEach((lab,i)=>{let acc=0;const x=L+i*cw+cw*.18,w=cw*.64;
-    series.forEach((se,si)=>{const v=Math.max(0,se.values[i]||0);if(!v)return;const y1=y(acc+v),y0=y(acc);bars+=`<rect x="${x}" y="${y1}" width="${w}" height="${Math.max(1,y0-y1)}" fill="${se.color||PAL[si%8]}" rx="2"><title>${esc(se.name)} · ${esc(lab)}: ${nfq.format(v)} ${unit}</title></rect>`;acc+=v});
+    series.forEach((se,si)=>{const v=Math.max(0,se.values[i]||0);if(!v)return;const y1=y(acc+v),y0=y(acc);bars+=`<rect x="${x}" y="${y1}" width="${w}" height="${Math.max(1,y0-y1)}" fill="${se.color||PAL[si%8]}" fill-opacity="${se.opacity||1}" rx="2"><title>${se.planned?"Planned · ":""}${esc(se.name)} · ${esc(lab)}: ${nfq.format(v)} ${unit}</title></rect>`;acc+=v});
     if(labels.length<=31 && (labels.length<=14||i%2===0)) bars+=`<text x="${x+w/2}" y="${H-8}" text-anchor="middle">${esc(lab)}</text>`;
   });
-  const leg=series.length>1?`<div class="legend">${series.map((s,i)=>`<span><i style="background:${s.color||PAL[i%8]}"></i>${esc(s.name)}</span>`).join("")}</div>`:"";
+  const ls=series.filter(s=>!s.planned), hasPl=series.some(s=>s.planned&&s.values.some(v=>v));
+  const leg=(ls.length>1||hasPl)?`<div class="legend">${ls.map((s,i)=>`<span><i style="background:${s.color||PAL[i%8]}"></i>${esc(s.name)}</span>`).join("")}${hasPl?`<span><i style="background:var(--muted);opacity:.5"></i>Faded = planned</span>`:""}</div>`:"";
   return `<div class="scroll"><svg class="chart" viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${labels.length>8?Math.min(W,560):0}px;max-height:260px">${g}${bars}</svg></div>${leg}`;
 }
 function hBars(rows,fmt){
@@ -535,8 +536,9 @@ function vCustomer(app,id){
   const cy=custCycle(id), u=custUnpaid(id), ub=custUnpaidBrand(id), O=custOrders(id).slice().reverse(), t=todayStr(), mc=mainContact(c);
   const acts=live("activities").filter(a=>a.customerId===id).sort((a,b)=>a.date<b.date?1:-1);
   // monthly chart, last 24 months, by product
-  const months=[]; {const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-23);for(let i=0;i<24;i++){months.push(ymd(d).slice(0,7));d.setMonth(d.getMonth()+1);}}
+  const months=[]; {const lastPl=O.filter(o=>o.planned).map(o=>o.date.slice(0,7)).sort().pop()||""; const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-23);for(let i=0;i<24||ymd(d).slice(0,7)<=lastPl;i++){months.push(ymd(d).slice(0,7));d.setMonth(d.getMonth()+1);}}
   const skus=[...new Set(O.flatMap(o=>o.lines.map(l=>l.sku)))];
+  const withPlanned=base=>base.concat(base.map(se=>({sku:se.sku,name:se.name,color:se.color,opacity:0.5,planned:true,values:months.map(m=>O.filter(o=>o.planned&&o.date.slice(0,7)===m).reduce((a,o)=>a+o.lines.filter(l=>l.sku===se.sku).reduce((x,l)=>x+(+l.qty||0),0),0))})));
   const series=skus.map(s=>({sku:s,name:(prodBySku(s)||{}).name||s,values:months.map(m=>O.filter(o=>!o.planned&&o.date.slice(0,7)===m).reduce((a,o)=>a+o.lines.filter(l=>l.sku===s).reduce((x,l)=>x+(+l.qty||0),0),0))}));
   const year=t.slice(0,4); const yq=O.filter(o=>o.date.startsWith(year)).reduce((s,o)=>s+orderQty(o),0);
   app.innerHTML=`<div class="row"><button class="btn sm" onclick="history.back()">‹ Back</button><h2 class="grow" style="margin:0 0 0 6px">${esc(c.name)}</h2><button class="btn sm" onclick="go('#cedit/${c.id}')">Edit</button></div>
@@ -551,7 +553,7 @@ function vCustomer(app,id){
    <div class="kpi cnotes"><div class="l" style="margin-bottom:4px">Notes <span class="muted" id="nSaved"></span></div><textarea id="c_note_live" placeholder="Write anything here — it saves by itself" style="min-height:64px;width:100%">${esc(c.notes||"")}</textarea></div>
   </div>
   <div class="row wrap" style="margin-bottom:6px"><button class="btn primary" onclick="go('#order/new:${c.id}')">+ New order</button><button class="btn" onclick="go('#order/planned:${c.id}')">+ Planned order</button></div>
-  <h3>Monthly quantities (ql), last 24 months</h3><div class="card pad">${O.length?stackedBars(months.map(m=>MONTHS[+m.slice(5)-1]+" "+m.slice(2,4)),colorSeries(series),"ql"):`<div class="empty">No orders yet</div>`}</div>
+  <h3>Monthly quantities (ql)</h3><div class="card pad">${O.length?stackedBars(months.map(m=>MONTHS[+m.slice(5)-1]+" "+m.slice(2,4)),withPlanned(colorSeries(series)),"ql"):`<div class="empty">No orders yet</div>`}</div>
   <h3>Contacts (${(c.contacts||[]).length})</h3><div class="card list">${(c.contacts||[]).map(k=>`<div class="item" style="cursor:default"><div class="grow"><div class="title">${esc(k.name||"(no name)")} ${k.id===c.mainContact?'<span class="chip green">Main contact</span>':""}</div><div class="small muted">${[k.role,k.phone,k.phone2,k.email].filter(Boolean).map(esc).join(" · ")}</div></div>${k.id===c.mainContact?"":`<button class="btn sm" data-main="${k.id}">Make main</button>`}<button class="btn sm" data-ked="${k.id}">Edit</button></div>`).join("")||`<div class="empty">No contacts yet</div>`}</div>
   <div class="row" style="margin-top:6px"><button class="btn sm" id="addContact">+ Add contact</button></div><div id="kForm"></div>
   <h3>Orders (${O.length})</h3><div class="card list">${O.map(o=>orderItem(o,true)).join("")||`<div class="empty">No orders</div>`}</div>`;
