@@ -131,7 +131,7 @@ svg.chart .grid{stroke:var(--line)}
 <script>
 "use strict";
 const SEED = null;
-const APP_VERSION = "1.14";
+const APP_VERSION = "1.15";
 const DB_KEY="crm.db.v1", AUTH_KEY="crm.auth.v1", COLS=["customers","products","orders","activities"];
 const DBX_FILE="/crm-data.json";
 
@@ -303,18 +303,21 @@ function prodColor(sku){
 function colorSeries(series){let w=0,c=0; for(const se of series){ if(!se.sku) continue; const f=fixedColor(se.sku); se.color=f||(isLario(se.sku)?WARM_FREE[w++%WARM_FREE.length]:COLD_FREE[c++%COLD_FREE.length]); } return series;}
 const PAL=["var(--c1)","var(--c2)","var(--c3)","var(--c4)","var(--c5)","var(--c6)","var(--c7)","var(--c8)"];
 function niceMax(v){if(v<=0)return 1;const p=Math.pow(10,Math.floor(Math.log10(v)));const n=v/p;return (n<=1?1:n<=2?2:n<=5?5:10)*p}
-function stackedBars(labels,series,unit){
+let _patN=0;
+function stackedBars(labels,series,unit,opts){ opts=opts||{}; const flags=opts.flags||[]; let defs="";
   const narrow=window.innerWidth<600, W=Math.max(300,labels.length*(narrow?28:50)+50),H=220,L=44,B=24,T=10,cw=(W-L-8)/labels.length;
   const tot=labels.map((_,i)=>series.reduce((s,se)=>s+Math.max(0,se.values[i]||0),0));
   const mx=niceMax(Math.max(...tot,0)); const y=v=>T+(H-T-B)*(1-v/mx);
   let g=""; for(let k=0;k<=4;k++){const v=mx*k/4;g+=`<line class="grid" x1="${L}" x2="${W-4}" y1="${y(v)}" y2="${y(v)}"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end">${nfq.format(v)}</text>`}
   let bars=""; labels.forEach((lab,i)=>{let acc=0;const x=L+i*cw+cw*.18,w=cw*.64;
-    series.forEach((se,si)=>{const v=Math.max(0,se.values[i]||0);if(!v)return;const y1=y(acc+v),y0=y(acc);bars+=`<rect x="${x}" y="${y1}" width="${w}" height="${Math.max(1,y0-y1)}" fill="${se.color||PAL[si%8]}" fill-opacity="${se.opacity||1}" rx="2"><title>${se.planned?"Planned · ":""}${esc(se.name)} · ${esc(lab)}: ${nfq.format(v)} ${unit}</title></rect>`;acc+=v});
-    if(labels.length<=31 && ((narrow?labels.length<=7:labels.length<=14)||i%2===0)) bars+=`<text x="${x+w/2}" y="${H-8}" text-anchor="middle">${esc(lab)}</text>`;
+    series.forEach((se,si)=>{const v=Math.max(0,se.values[i]||0);if(!v)return;const y1=y(acc+v),y0=y(acc);let fill=se.color||PAL[si%8]; if(se.hatch){const id="hp"+(++_patN); defs+=`<pattern id="${id}" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(45)"><rect width="7" height="7" fill="${fill}" fill-opacity=".22"/><rect width="3.5" height="7" fill="${fill}"/></pattern>`; fill=`url(#${id})`;}
+      bars+=`<rect x="${x}" y="${y1}" width="${w}" height="${Math.max(1,y0-y1)}" fill="${fill}" fill-opacity="${se.opacity||1}" rx="2"${se.hatch?` stroke="${se.color}" stroke-width="1"`:""}><title>${se.planned?"Planned · ":se.hatch?"Unpaid · ":""}${esc(se.name)} · ${esc(lab)}: ${nfq.format(v)} ${unit}</title></rect>`;acc+=v});
+    if(flags[i]) bars+=`<circle cx="${x+w/2}" cy="${H-B+5}" r="3" fill="#D32F2F"><title>Unpaid in ${esc(lab)}</title></circle>`;
+    if(labels.length<=31 && ((narrow?labels.length<=7:labels.length<=14)||i%2===0)) bars+=`<text x="${x+w/2}" y="${H-6}" text-anchor="middle"${flags[i]?' style="fill:#D32F2F;font-weight:700"':""}>${esc(lab)}</text>`;
   });
-  const ls=series.filter(s=>!s.planned), hasPl=series.some(s=>s.planned&&s.values.some(v=>v));
-  const leg=(ls.length>1||hasPl)?`<div class="legend">${ls.map((s,i)=>`<span><i style="background:${s.color||PAL[i%8]}"></i>${esc(s.name)}</span>`).join("")}${hasPl?`<span><i style="background:var(--muted);opacity:.5"></i>Faded = planned</span>`:""}</div>`:"";
-  return `<div class="scroll"><svg class="chart" viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${!narrow&&labels.length>8?Math.min(W,560):0}px;max-height:260px">${g}${bars}</svg></div>${leg}`;
+  const ls=series.filter(s=>!s.planned&&!s.hatch), hasPl=series.some(s=>s.planned&&s.values.some(v=>v)), hasUp=series.some(s=>s.hatch&&s.values.some(v=>v));
+  const leg=(ls.length>1||hasPl||hasUp)?`<div class="legend">${ls.map((s,i)=>`<span><i style="background:${s.color||PAL[i%8]}"></i>${esc(s.name)}</span>`).join("")}${hasUp?`<span><i style="background:repeating-linear-gradient(45deg,var(--muted) 0 2px,transparent 2px 4px);border:1px solid var(--muted)"></i>Striped + <b style="color:#D32F2F">red date</b> = unpaid</span>`:""}${hasPl?`<span><i style="background:var(--muted);opacity:.5"></i>Faded = planned</span>`:""}</div>`:"";
+  return `<div class="scroll"><svg class="chart" viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${!narrow&&labels.length>8?Math.min(W,560):0}px;max-height:260px"><defs>${defs}</defs>${g}${bars}</svg></div>${leg}`;
 }
 function hBars(rows,fmt){
   const mx=Math.max(...rows.map(r=>r.v),0)||1;
@@ -539,8 +542,11 @@ function vCustomer(app,id){
   const months=[]; {const lastPl=O.filter(o=>o.planned).map(o=>o.date.slice(0,7)).sort().pop()||""; const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-23);for(let i=0;i<24||ymd(d).slice(0,7)<=lastPl;i++){months.push(ymd(d).slice(0,7));d.setMonth(d.getMonth()+1);}
     if(window.innerWidth<600) months.splice(0,12);}
   const skus=[...new Set(O.flatMap(o=>o.lines.map(l=>l.sku)))];
-  const withPlanned=base=>base.concat(base.map(se=>({sku:se.sku,name:se.name,color:se.color,opacity:0.5,planned:true,values:months.map(m=>O.filter(o=>o.planned&&o.date.slice(0,7)===m).reduce((a,o)=>a+o.lines.filter(l=>l.sku===se.sku).reduce((x,l)=>x+(+l.qty||0),0),0))})));
-  const series=skus.map(s=>({sku:s,name:(prodBySku(s)||{}).name||s,values:months.map(m=>O.filter(o=>!o.planned&&o.date.slice(0,7)===m).reduce((a,o)=>a+o.lines.filter(l=>l.sku===s).reduce((x,l)=>x+(+l.qty||0),0),0))}));
+  const withPlanned=base=>base.concat(base.filter(se=>!se.hatch).map(se=>({sku:se.sku,name:se.name,color:se.color,opacity:0.5,planned:true,values:months.map(m=>O.filter(o=>o.planned&&o.date.slice(0,7)===m).reduce((a,o)=>a+o.lines.filter(l=>l.sku===se.sku).reduce((x,l)=>x+(+l.qty||0),0),0))})));
+  const qtyIn=(m,s,f)=>O.filter(o=>!o.planned&&o.date.slice(0,7)===m&&f(o)).reduce((a,o)=>a+o.lines.filter(l=>l.sku===s).reduce((x,l)=>x+(+l.qty||0),0),0);
+  const withUnpaid=base=>base.concat(base.map(se=>({sku:se.sku,name:se.name,color:se.color,hatch:true,values:months.map(m=>qtyIn(m,se.sku,o=>!isPaid(o)))})));
+  const upFlags=months.map(m=>O.some(o=>!o.planned&&o.status!=="cancelled"&&o.date.slice(0,7)===m&&!isPaid(o)));
+  const series=skus.map(s=>({sku:s,name:(prodBySku(s)||{}).name||s,values:months.map(m=>O.filter(o=>!o.planned&&isPaid(o)&&o.date.slice(0,7)===m).reduce((a,o)=>a+o.lines.filter(l=>l.sku===s).reduce((x,l)=>x+(+l.qty||0),0),0))}));
   const year=t.slice(0,4); const yq=O.filter(o=>o.date.startsWith(year)).reduce((s,o)=>s+orderQty(o),0);
   app.innerHTML=`<div class="row"><button class="btn sm" onclick="history.back()">‹ Back</button><h2 class="grow" style="margin:0 0 0 6px">${esc(c.name)}</h2><button class="btn sm" onclick="go('#cedit/${c.id}')">Edit</button></div>
   <div class="card pad" style="margin-top:12px">
@@ -554,7 +560,7 @@ function vCustomer(app,id){
    <div class="kpi cnotes"><div class="l" style="margin-bottom:4px">Notes <span class="muted" id="nSaved"></span></div><textarea id="c_note_live" placeholder="Write anything here — it saves by itself" style="min-height:64px;width:100%">${esc(c.notes||"")}</textarea></div>
   </div>
   <div class="row wrap" style="margin-bottom:6px"><button class="btn primary" onclick="go('#order/new:${c.id}')">+ New order</button><button class="btn" onclick="go('#order/planned:${c.id}')">+ Planned order</button></div>
-  <h3>Monthly quantities (ql)${window.innerWidth<600?", last 12 months":", last 24 months"}</h3><div class="card pad">${O.length?stackedBars(months.map(m=>MONTHS[+m.slice(5)-1]+" "+m.slice(2,4)),withPlanned(colorSeries(series)),"ql"):`<div class="empty">No orders yet</div>`}</div>
+  <h3>Monthly quantities (ql)${window.innerWidth<600?", last 12 months":", last 24 months"}</h3><div class="card pad">${O.length?stackedBars(months.map(m=>MONTHS[+m.slice(5)-1]+" "+m.slice(2,4)),withPlanned(withUnpaid(colorSeries(series))).filter((se,i,arr)=>se.values.some(v=>v)||!(se.hatch||se.planned)),"ql",{flags:upFlags}):`<div class="empty">No orders yet</div>`}</div>
   <h3>Contacts (${(c.contacts||[]).length})</h3><div class="card list">${(c.contacts||[]).map(k=>`<div class="item" style="cursor:default"><div class="grow"><div class="title">${esc(k.name||"(no name)")} ${k.id===c.mainContact?'<span class="chip green">Main contact</span>':""}</div><div class="small muted">${[k.role,k.phone,k.phone2,k.email].filter(Boolean).map(esc).join(" · ")}</div></div>${k.id===c.mainContact?"":`<button class="btn sm" data-main="${k.id}">Make main</button>`}<button class="btn sm" data-ked="${k.id}">Edit</button></div>`).join("")||`<div class="empty">No contacts yet</div>`}</div>
   <div class="row" style="margin-top:6px"><button class="btn sm" id="addContact">+ Add contact</button></div><div id="kForm"></div>
   <h3>Orders (${O.length})</h3><div class="card list">${O.map(o=>orderItem(o,true)).join("")||`<div class="empty">No orders</div>`}</div>`;
