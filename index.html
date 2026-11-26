@@ -132,7 +132,7 @@ svg.chart .grid{stroke:var(--line)}
 <script>
 "use strict";
 const SEED = null;
-const APP_VERSION = "1.16";
+const APP_VERSION = "1.17";
 const DB_KEY="crm.db.v1", AUTH_KEY="crm.auth.v1", COLS=["customers","products","orders","activities"];
 const DBX_FILE="/crm-data.json";
 
@@ -292,16 +292,34 @@ function fixedColor(sku){
   if(n.includes("celeste")) return "#5BB8F0";                                                      // Borgo Rinforzata Celeste
   if(n.includes("azzurr")) return /\b2\b/.test(n)?"#7EC8F5":"#2F8FE0";                              // Lario Azzurra 1 / 2
   if(n.includes("arancio")&&isLario(sku)) return /\b2\b/.test(n)?"#F5A04A":"#F07C1E";               // Lario Arancio 1 / 2
+  if(p.sku==="L 1035") return "#C98A0B";   // Lario R: deep amber
+  if(p.sku==="L 1075") return "#B4552D";   // Lario D: terracotta
+  if(p.sku==="L 1235") return "#7A3E8E";   // Lario Super P: plum
   return null;
 }
-const WARM_FREE=["#E8B400","#D7263D","#8C1C2E","#7B3FA0"];   // other Lario: yellow, red, burgundy, purple
-const COLD_FREE=["#3F3DB5","#1E6FD9","#14B8A6"];             // other Borgo/Mol.Ind.: indigo, blue, aqua green
+const WARM_FREE=["#B07AA1","#D08C60","#5E2750","#6B4E16","#E08E79","#9C7B3A"];   // other Lario: mauve, sand, aubergine, bronze, salmon, khaki
+const COLD_FREE=["#1E6FD9","#3F3DB5","#14B8A6","#0B4F6C","#6366F1","#0E7490"];   // other Borgo/Mol.Ind.: blue, indigo, aqua, navy-teal, periwinkle, teal
 function prodColor(sku){
   const f=fixedColor(sku); if(f) return f;
-  const all=live("products").filter(p=>!fixedColor(p.sku)&&isLario(p.sku)===isLario(sku)).map(p=>p.sku).sort();
+  const sm=soldMap(); // best sellers get the first, most distinct colours
+  const all=live("products").filter(p=>!fixedColor(p.sku)&&isLario(p.sku)===isLario(sku)).sort((a,b)=>((sm[b.sku]||0)-(sm[a.sku]||0))||a.sku.localeCompare(b.sku)).map(p=>p.sku);
   const pal=isLario(sku)?WARM_FREE:COLD_FREE; const i=Math.max(0,all.indexOf(sku)); return pal[i%pal.length];
 }
-function colorSeries(series){let w=0,c=0; for(const se of series){ if(!se.sku) continue; const f=fixedColor(se.sku); se.color=f||(isLario(se.sku)?WARM_FREE[w++%WARM_FREE.length]:COLD_FREE[c++%COLD_FREE.length]); } return series;}
+function colorSeries(series){ for(const se of series){ if(se.sku) se.color=prodColor(se.sku); } return series;}
+function _hexRgb(h){h=h.replace("#","");return [0,2,4].map(i=>parseInt(h.substr(i,2),16))}
+function _lum(rgb){return (0.299*rgb[0]+0.587*rgb[1]+0.114*rgb[2])/255}
+function isDark(){const t=document.documentElement.getAttribute("data-theme");return t?t==="dark":window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches}
+function textColor(hex){ // same hue as the chart colour, adjusted so it reads well as text
+  let c=_hexRgb(hex), L=_lum(c), dark=isDark();
+  if(!dark&&L>0.55){const f=0.55/L;c=c.map(v=>Math.round(v*f));}
+  if(dark&&L<0.45){c=c.map(v=>Math.round(v+(255-v)*0.45));}
+  return "rgb("+c.join(",")+")";
+}
+function prodLabel(sku){
+  const name=prodName(sku), m=/^(LARIO|BORGO|MOL\.?\s?IND\.?)\s+(.*)$/i.exec(name);
+  const bc=isLario(sku)?"p-lario":"p-borgo", col=textColor(prodColor(sku));
+  return m?`<span class="${bc}">${esc(m[1])}</span> <span style="color:${col};font-weight:600">${esc(m[2])}</span>`:`<span style="color:${col};font-weight:600">${esc(name)}</span>`;
+}
 const PAL=["var(--c1)","var(--c2)","var(--c3)","var(--c4)","var(--c5)","var(--c6)","var(--c7)","var(--c8)"];
 function niceMax(v){if(v<=0)return 1;const p=Math.pow(10,Math.floor(Math.log10(v)));const n=v/p;return (n<=1?1:n<=2?2:n<=5?5:10)*p}
 let _patN=0;
@@ -396,7 +414,7 @@ function vOrders(app){
   draw();
 }
 function orderItem(o,inCust){
-  const items=o.lines.map(l=>`<div><span class="${isLario(l.sku)?"p-lario":"p-borgo"}">${esc(prodName(l.sku))}</span> <span class="muted">· ${nfq.format(l.qty)} ql · ${eur(lineNet(l))}/ql</span></div>`).join("");
+  const items=o.lines.map(l=>`<div>${prodLabel(l.sku)} <span class="muted">· ${nfq.format(l.qty)} ql · ${eur(lineNet(l))}/ql</span></div>`).join("");
   return `<a class="item${o.planned?" planned":""}" href="#order/${o.id}" style="align-items:flex-start"><div class="grow"><div class="title">${inCust?fDate(o.date):esc(custName(o.customerId))+` <span class="small muted" style="font-weight:400">${fDate(o.date)}</span>`}</div><div class="small" style="margin-top:2px">${items}</div></div><div class="right"><div class="num">${eur(orderTotal(o))}</div>${o.planned?`<div><span class="chip planned">Planned</span></div>`:""}<div>${statusChip(o)} ${inCust?paidChip(o)+(isPaid(o)?"":" "+payChip(o)):payChip(o)}</div></div></a>`;
 }
 
