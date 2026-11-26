@@ -70,7 +70,7 @@ h3{font-size:15px;margin:18px 0 8px;color:var(--muted);font-weight:600;text-tran
 .title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip{display:inline-block;font-size:12px;padding:1px 8px;border-radius:10px;background:var(--surface2);color:var(--muted);white-space:nowrap;font-weight:500}
 .chip.paid{background:var(--green);color:#fff}.chip.unpaid{background:var(--red);color:#fff}
-.chip.planned{background:#F2C200;color:#3a2f00}.item.planned,.item.planned *:not(.chip){color:#9aa0a3!important}
+.chip.planned{background:#F2C200;color:#3a2f00}.item.planned,.item.planned *:not(.chip):not(.pc):not(.p-lario):not(.p-borgo){color:#9aa0a3!important}
 .p-lario{color:var(--lario);font-weight:600}.p-borgo{color:var(--borgo);font-weight:600}
 .chip.red{background:var(--red-soft);color:var(--red)}.chip.amber{background:var(--amber-soft);color:var(--amber)}.chip.blue{background:var(--blue-soft);color:var(--blue)}.chip.green{background:var(--green-soft);color:var(--green)}
 .btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 14px;cursor:pointer;white-space:nowrap}
@@ -132,7 +132,7 @@ svg.chart .grid{stroke:var(--line)}
 <script>
 "use strict";
 const SEED = null;
-const APP_VERSION = "1.17";
+const APP_VERSION = "1.18";
 const DB_KEY="crm.db.v1", AUTH_KEY="crm.auth.v1", COLS=["customers","products","orders","activities"];
 const DBX_FILE="/crm-data.json";
 
@@ -318,7 +318,7 @@ function textColor(hex){ // same hue as the chart colour, adjusted so it reads w
 function prodLabel(sku){
   const name=prodName(sku), m=/^(LARIO|BORGO|MOL\.?\s?IND\.?)\s+(.*)$/i.exec(name);
   const bc=isLario(sku)?"p-lario":"p-borgo", col=textColor(prodColor(sku));
-  return m?`<span class="${bc}">${esc(m[1])}</span> <span style="color:${col};font-weight:600">${esc(m[2])}</span>`:`<span style="color:${col};font-weight:600">${esc(name)}</span>`;
+  return m?`<span class="${bc}">${esc(m[1])}</span> <span class="pc" style="color:${col};font-weight:600">${esc(m[2])}</span>`:`<span class="pc" style="color:${col};font-weight:600">${esc(name)}</span>`;
 }
 const PAL=["var(--c1)","var(--c2)","var(--c3)","var(--c4)","var(--c5)","var(--c6)","var(--c7)","var(--c8)"];
 function niceMax(v){if(v<=0)return 1;const p=Math.pow(10,Math.floor(Math.log10(v)));const n=v/p;return (n<=1?1:n<=2?2:n<=5?5:10)*p}
