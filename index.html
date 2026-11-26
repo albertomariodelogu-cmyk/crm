@@ -15,17 +15,17 @@
   --accent:#1f5c45; --accent-ink:#ffffff; --accent-soft:#e1efe8;
   --red:#b3261e; --red-soft:#fbe4e1; --amber:#9a5b00; --amber-soft:#fdf0d8; --blue:#1d5fa8; --blue-soft:#e2ecf8; --green:#1e7a4c; --green-soft:#e0f2e8;
   --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#8a5cd1; --c5:#d4a20c; --c6:#d1497b; --c7:#4aa3b5; --c8:#1E7B3E;
-  --radius:10px; --shadow:0 1px 2px rgba(0,0,0,.06),0 2px 8px rgba(0,0,0,.04);
+  --lario:#8C1C2E; --borgo:#1E6B3A; --radius:10px; --shadow:0 1px 2px rgba(0,0,0,.06),0 2px 8px rgba(0,0,0,.04);
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --bg:#141615; --surface:#1d201f; --surface2:#262a28; --text:#e8eae8; --muted:#9aa19d; --line:#333835;
     --accent:#5fbf95; --accent-ink:#0d1f17; --accent-soft:#1f3b2f;
     --red:#ff8a80; --red-soft:#3d1f1c; --amber:#f2b552; --amber-soft:#3a2d14; --blue:#8ab8ee; --blue-soft:#1b2a3d; --green:#6fd39d; --green-soft:#183326;
-    --shadow:none;
+    --shadow:none; --lario:#E7849A; --borgo:#6FCF97;
   }
 }
-:root[data-theme="dark"]{
+:root[data-theme="dark"]{ --lario:#E7849A; --borgo:#6FCF97;
   --bg:#141615; --surface:#1d201f; --surface2:#262a28; --text:#e8eae8; --muted:#9aa19d; --line:#333835;
   --accent:#5fbf95; --accent-ink:#0d1f17; --accent-soft:#1f3b2f;
   --red:#ff8a80; --red-soft:#3d1f1c; --amber:#f2b552; --amber-soft:#3a2d14; --blue:#8ab8ee; --blue-soft:#1b2a3d; --green:#6fd39d; --green-soft:#183326;
@@ -71,6 +71,7 @@ h3{font-size:15px;margin:18px 0 8px;color:var(--muted);font-weight:600;text-tran
 .chip{display:inline-block;font-size:12px;padding:1px 8px;border-radius:10px;background:var(--surface2);color:var(--muted);white-space:nowrap;font-weight:500}
 .chip.paid{background:var(--green);color:#fff}.chip.unpaid{background:var(--red);color:#fff}
 .chip.planned{background:#F2C200;color:#3a2f00}.item.planned,.item.planned *:not(.chip){color:#9aa0a3!important}
+.p-lario{color:var(--lario);font-weight:600}.p-borgo{color:var(--borgo);font-weight:600}
 .chip.red{background:var(--red-soft);color:var(--red)}.chip.amber{background:var(--amber-soft);color:var(--amber)}.chip.blue{background:var(--blue-soft);color:var(--blue)}.chip.green{background:var(--green-soft);color:var(--green)}
 .btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 14px;cursor:pointer;white-space:nowrap}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
@@ -131,7 +132,7 @@ svg.chart .grid{stroke:var(--line)}
 <script>
 "use strict";
 const SEED = null;
-const APP_VERSION = "1.15";
+const APP_VERSION = "1.16";
 const DB_KEY="crm.db.v1", AUTH_KEY="crm.auth.v1", COLS=["customers","products","orders","activities"];
 const DBX_FILE="/crm-data.json";
 
@@ -283,7 +284,7 @@ function nextOrderNo(){
 /* ---------- charts (inline SVG) ---------- */
 const WARM=["#E8B400","#F07C1E","#D7263D","#8C1C2E","#7B3FA0"];          // Lario: yellow, orange, red, burgundy, purple
 const COLD=["#3F3DB5","#1E6FD9","#5BB8F0","#14B8A6","#7CCF5B","#1E7B3E"]; // Borgo / Mol.Ind.: indigo, blue, light blue, aqua green, light green, dark green
-function isLario(sku){const p=prodBySku(sku);return p?((p.brand||"").toLowerCase()==="lario"):/^L/.test(sku)}
+function isLario(sku){const p=prodBySku(sku);if(p&&/^mol/i.test(p.name||""))return false;return p?((p.brand||"").toLowerCase()==="lario"):/^L/.test(sku)}
 // Products whose name is a bag colour always get that colour
 function fixedColor(sku){
   const p=prodBySku(sku); if(!p) return null; const n=(p.name||"").toLowerCase();
@@ -395,7 +396,7 @@ function vOrders(app){
   draw();
 }
 function orderItem(o,inCust){
-  const items=o.lines.map(l=>`<div>${esc(prodName(l.sku))} <span class="muted">· ${nfq.format(l.qty)} ql · ${eur(lineNet(l))}/ql</span></div>`).join("");
+  const items=o.lines.map(l=>`<div><span class="${isLario(l.sku)?"p-lario":"p-borgo"}">${esc(prodName(l.sku))}</span> <span class="muted">· ${nfq.format(l.qty)} ql · ${eur(lineNet(l))}/ql</span></div>`).join("");
   return `<a class="item${o.planned?" planned":""}" href="#order/${o.id}" style="align-items:flex-start"><div class="grow"><div class="title">${inCust?fDate(o.date):esc(custName(o.customerId))+` <span class="small muted" style="font-weight:400">${fDate(o.date)}</span>`}</div><div class="small" style="margin-top:2px">${items}</div></div><div class="right"><div class="num">${eur(orderTotal(o))}</div>${o.planned?`<div><span class="chip planned">Planned</span></div>`:""}<div>${statusChip(o)} ${inCust?paidChip(o)+(isPaid(o)?"":" "+payChip(o)):payChip(o)}</div></div></a>`;
 }
 
